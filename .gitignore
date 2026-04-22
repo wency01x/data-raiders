@@ -1,0 +1,15 @@
+venv/
+__pycache__/
+
+.env
+.env.local
+
+node_modules
+
+server/__pycache__
+
+shared/__pycache__
+
+webclient/__pycache__
+
+webclient/node_modules
