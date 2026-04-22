@@ -53,5 +53,5 @@ python client/main.py
 ## Features
 - **SQL-Based Mechanics**: Dependency-based SQL deletion gameplay mechanics with HP penalties.
 - **Real-Time Multiplayer**: Built on fast, reliable WebSockets and FastAPI to support live, connected gameplay.
-- **Visual Fidelity**: Beautiful animated sprites and dynamic canvas elements in the React interface.
+- **Visual Fidelity**: Beautiful animated sprites and dynamic canvas elements in the react interface.
 - **Cross-Platform Play**: Enjoy the game from either the desktop Pygame client or the modern React web client.
