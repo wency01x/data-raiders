@@ -460,6 +460,7 @@ export default function GameCanvas({ ws, gameState, myId, attacks }: Props) {
       height={720}
       tabIndex={0}
       className="absolute inset-0 w-full h-full outline-none"
+      style={{ objectFit: 'contain' }}
     />
   );
 }
