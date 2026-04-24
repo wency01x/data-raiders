@@ -110,13 +110,13 @@ export default function App() {
   } catch { schemaInfo = {}; }
 
   return (
-    <div className="min-h-screen bg-gray-950 p-3 md:p-5 text-white font-sans flex flex-col md:flex-row gap-4 justify-center max-w-[1520px] mx-auto">
+    <div className="h-full w-full bg-gray-950 p-3 md:p-5 text-white font-sans flex flex-col md:flex-row gap-4">
 
       {/* ── LEFT COLUMN ─────────────────────────────────────── */}
-      <div className="flex flex-col w-full md:w-[360px] gap-3 shrink-0">
+      <div className="flex flex-col w-full md:w-[360px] gap-2 shrink-0 h-full pb-1 overflow-hidden">
 
         {/* Room Header */}
-        <div className="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-2xl p-4 shadow-lg shadow-indigo-500/20">
+        <div className="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-2xl p-3 shadow-lg shadow-indigo-500/20">
           <div className="flex items-center gap-2 mb-1">
             <span className="text-xs font-bold bg-white/20 px-2.5 py-0.5 rounded-full">ROOM {roomNum}/5</span>
             <div className="flex items-center gap-1.5 ml-auto">
@@ -143,7 +143,7 @@ export default function App() {
         </div>
 
         {/* Mission Objective */}
-        <div className="bg-gray-900 rounded-2xl border border-gray-800 p-4">
+        <div className="bg-gray-900 rounded-2xl border border-gray-800 p-3">
           <h2 className="text-xs font-extrabold text-amber-400 tracking-wider mb-2 flex items-center gap-1.5">
             <span>🎯</span> MISSION OBJECTIVE
           </h2>
@@ -173,7 +173,7 @@ export default function App() {
 
         {/* Schema Card */}
         {schemaInfo.columns && (
-          <div className="bg-gray-900 rounded-2xl border border-gray-800 p-4">
+          <div className="bg-gray-900 rounded-2xl border border-gray-800 p-3 flex flex-col shrink">
             <h2 className="text-xs font-extrabold text-cyan-400 tracking-wider mb-2 flex items-center gap-1.5">
               <span>📋</span> TABLE SCHEMA
             </h2>
@@ -207,7 +207,7 @@ export default function App() {
         )}
 
         {/* SQL Terminal */}
-        <div className="bg-gray-900 rounded-2xl border border-gray-800 p-4">
+        <div className="bg-gray-900 rounded-2xl border border-gray-800 p-3 flex flex-col shrink">
           <h2 className="text-xs font-extrabold text-green-400 tracking-wider mb-2 flex items-center gap-1.5">
             <span>💻</span> SQL TERMINAL
           </h2>
@@ -256,7 +256,7 @@ export default function App() {
         </div>
 
         {/* Chat */}
-        <div className="bg-gray-900 rounded-2xl border border-gray-800 flex flex-col p-4" style={{ height: 220 }}>
+        <div className="bg-gray-900 rounded-2xl border border-gray-800 flex flex-col p-3 flex-1 min-h-[120px]">
           <div className="flex justify-between items-center mb-2">
             <h2 className="text-xs font-extrabold text-gray-400 tracking-wider flex items-center gap-1.5">
               <span>💬</span> CHAT & LOG
@@ -304,7 +304,7 @@ export default function App() {
         </div>
 
         {/* Controls */}
-        <div className="bg-gray-900 rounded-2xl border border-gray-800 p-4">
+        <div className="bg-gray-900 rounded-2xl border border-gray-800 p-2">
           <h2 className="text-[10px] font-extrabold text-gray-500 tracking-wider mb-2">CONTROLS</h2>
           <div className="flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-gray-400 font-semibold">
             <span><b className="text-white">WASD</b> move</span>
@@ -316,14 +316,14 @@ export default function App() {
       </div>
 
       {/* ── RIGHT COLUMN: Canvas ─────────────────────────────── */}
-      <div className="flex flex-col items-center w-full max-w-[940px]">
+      <div className="flex flex-col w-full flex-1 h-full min-w-0">
         {/* Brief */}
-        <div className="w-full bg-gray-900 rounded-t-2xl border border-b-0 border-gray-800 px-4 py-3">
+        <div className="w-full bg-gray-900 rounded-t-2xl border border-b-0 border-gray-800 px-4 py-3 shrink-0">
           <pre className="text-gray-300 whitespace-pre-wrap font-mono leading-relaxed text-[11px] font-semibold">
             {brief || "Connecting..."}
           </pre>
         </div>
-        <div className="bg-gray-900 rounded-b-2xl border border-gray-800 w-full relative overflow-hidden" style={{ height: 720 }}>
+        <div className="bg-gray-900 rounded-b-2xl border border-gray-800 w-full flex-1 relative overflow-hidden min-h-[400px]">
           <GameCanvas ws={ws} gameState={gameState} myId={myId} attacks={attacks} />
         </div>
       </div>
