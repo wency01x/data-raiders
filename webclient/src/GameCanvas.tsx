@@ -278,13 +278,6 @@ export default function GameCanvas({ ws, gameState, myId, attacks }: Props) {
           ctx.textAlign = "center";
           ctx.fillText((e.label || "?").substring(0, 10), e.x + TILE / 2, e.y - 12);
 
-          // Row data subtext
-          const sub = getEnemySubtext(e);
-          if (sub) {
-            ctx.fillStyle = "#94a3b8";
-            ctx.font = "9px 'Segoe UI', sans-serif";
-            ctx.fillText(sub.substring(0, 20), e.x + TILE / 2, e.y - 2);
-          }
 
           // HP bar
           const ratio = Math.max(0, e.hp / Math.max(1, e.max_hp));
