@@ -145,7 +145,7 @@ export default function App() {
         {/* Mission Objective */}
         <div className="bg-gray-900 rounded-2xl border border-gray-800 p-3">
           <h2 className="text-xs font-extrabold text-amber-400 tracking-wider mb-2 flex items-center gap-1.5">
-            <span>🎯</span> MISSION OBJECTIVE
+            <span></span> MISSION OBJECTIVE
           </h2>
           <p className="text-sm font-bold text-white leading-relaxed bg-amber-500/10 border border-amber-500/20 rounded-xl px-3 py-2">
             {objective || "Loading..."}
@@ -156,8 +156,8 @@ export default function App() {
             </p>
           )}
           <div className="mt-3 flex items-center gap-2">
-            {enemies.length > 0 ? (
-              <span className="text-xs font-bold text-red-400">⚔ {enemies.length} targets remaining</span>
+            {!gameState?.room_cleared ? (
+              <span className="text-xs font-bold text-red-400">⚔ {gameState?.targets_remaining ?? enemies.length} targets remaining</span>
             ) : (
               <span className="text-xs font-bold text-green-400">✓ All clear — walk to the portal!</span>
             )}
@@ -175,7 +175,7 @@ export default function App() {
         {schemaInfo.columns && (
           <div className="bg-gray-900 rounded-2xl border border-gray-800 p-3 flex flex-col shrink">
             <h2 className="text-xs font-extrabold text-cyan-400 tracking-wider mb-2 flex items-center gap-1.5">
-              <span>📋</span> TABLE SCHEMA
+              <span></span> TABLE SCHEMA
             </h2>
             <div className="bg-gray-950 rounded-xl border border-gray-800 overflow-hidden">
               <div className="bg-cyan-500/10 border-b border-gray-800 px-3 py-1.5">
@@ -209,7 +209,7 @@ export default function App() {
         {/* SQL Terminal */}
         <div className="bg-gray-900 rounded-2xl border border-gray-800 p-3 flex flex-col shrink">
           <h2 className="text-xs font-extrabold text-green-400 tracking-wider mb-2 flex items-center gap-1.5">
-            <span>💻</span> SQL TERMINAL
+            <span></span> SQL TERMINAL
           </h2>
           <div className="flex items-center gap-2 mb-2">
             <span className="text-green-400 font-mono text-sm font-bold">$</span>
