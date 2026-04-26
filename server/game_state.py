@@ -186,7 +186,28 @@ class GameState:
             "schema_info": self.room_schema,
             "hint":       self.room_hint,
             "allowed_spells": self.allowed_spells,
+            "room_cleared":   self.is_room_cleared(),
+            "targets_remaining": self.targets_remaining,
         }
+
+    @property
+    def targets_remaining(self) -> int:
+        count = 0
+        for e in self.enemies.values():
+            if not e.alive:
+                continue
+            if self.room_number == 1 and e.extra.get("status") == "CORRUPTED":
+                count += 1
+            elif self.room_number == 2 and e.extra.get("dept") == "BUGS":
+                count += 1
+            elif self.room_number == 3 and e.extra.get("role") == "Dev":
+                count += 1
+            elif self.room_number in (4, 5):
+                count += 1
+        return count
+
+    def is_room_cleared(self) -> bool:
+        return self.targets_remaining == 0
 
 
 state = GameState()
