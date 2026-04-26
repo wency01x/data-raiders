@@ -206,10 +206,10 @@ export default function GameCanvas({ ws, gameState, myId, attacks }: Props) {
       ctx.strokeRect(0, 0, COLS * TILE, ROWS * TILE);
 
       if (gs) {
-        const aliveEnemies = (gs.enemies || []).filter((e: any) => e.alive).length;
+        const isCleared = gs.room_cleared ?? false;
 
         /* ── PORTAL ───────────────────────────────────────── */
-        if (aliveEnemies === 0) {
+        if (isCleared) {
           const portX = 13 * TILE, portY = 5 * TILE;
           const pS = TILE * 2;
           if (portalImg.current) {
