@@ -30,7 +30,7 @@ function nearestEnemy(gs: any, myId: string | null): number | null {
     const d = Math.hypot(e.x - me.x, e.y - me.y);
     if (d < bestD) { bestD = d; best = e.id; }
   }
-  return bestD < TILE * 4 ? best : null;
+  return bestD < TILE * 1.5 ? best : null;
 }
 
 /* ── rounded rect helper ──────────────────────────────────────── */
