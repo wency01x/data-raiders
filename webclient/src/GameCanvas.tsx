@@ -13,6 +13,13 @@ import slime2Atk  from './assets/mobs/PNG/Slime2/Without_shadow/Slime2_Attack_wi
 import slime3Idle from './assets/mobs/PNG/Slime3/Without_shadow/Slime3_Idle_without_shadow.png';
 import slime3Atk  from './assets/mobs/PNG/Slime3/Without_shadow/Slime3_Attack_without_shadow.png';
 
+import bgTileSrc from './assets/background/1 Tiles/FieldsTile_38.png';
+import stone1Src from './assets/background/2 Objects/4 Stone/1.png';
+import stone2Src from './assets/background/2 Objects/4 Stone/2.png';
+import stone3Src from './assets/background/2 Objects/4 Stone/3.png';
+import bush1Src  from './assets/background/2 Objects/9 Bush/1.png';
+import bush2Src  from './assets/background/2 Objects/9 Bush/2.png';
+
 const TILE = 56;
 const COLS = 16;
 const ROWS = 12;
@@ -84,8 +91,31 @@ if (typeof window !== "undefined") {
 }
 const CHAR_CLASSES = ['Archer', 'Swordsman', 'Wizard'];
 
-/* ── Slime sprites (enemy mobs) ────────────────────────────────── */
+/* ── Slime sprites & Environment ─────────────────────────────────── */
 const SLIME_SPRITES: Record<string, HTMLImageElement> = {};
+const ENV_SPRITES: Record<string, HTMLImageElement> = {};
+
+if (typeof window !== "undefined") {
+  const slimeLoads: [string, string][] = [
+    ['slime1Idle', slime1Idle], ['slime1Atk', slime1Atk],
+    ['slime2Idle', slime2Idle], ['slime2Atk', slime2Atk],
+    ['slime3Idle', slime3Idle], ['slime3Atk', slime3Atk],
+  ];
+  slimeLoads.forEach(([key, src]) => {
+    const img = new Image(); img.src = src;
+    SLIME_SPRITES[key] = img;
+  });
+
+  const envLoads: [string, string][] = [
+    ['bg', bgTileSrc],
+    ['stone1', stone1Src], ['stone2', stone2Src], ['stone3', stone3Src],
+    ['bush1', bush1Src], ['bush2', bush2Src]
+  ];
+  envLoads.forEach(([key, src]) => {
+    const img = new Image(); img.src = src;
+    ENV_SPRITES[key] = img;
+  });
+}
 if (typeof window !== "undefined") {
   const loads: [string, string][] = [
     ['slime1Idle', slime1Idle], ['slime1Atk', slime1Atk],
@@ -213,13 +243,14 @@ export default function GameCanvas({ ws, gameState, myId, attacks }: Props) {
 
     const draw = () => {
       const W = cvs.width, H = cvs.height;
+      ctx.imageSmoothingEnabled = false;
       const gs = gsRef.current;
       const currentMyId = idRef.current;
       const currentSpell = spellRef.current;
       const tid = nearestEnemy(gs, currentMyId);
 
       // Dark background
-      ctx.fillStyle = "#0f172a";
+      ctx.fillStyle = "#1b3d1b";
       ctx.fillRect(0, 0, W, H);
 
       ctx.save();
@@ -227,19 +258,56 @@ export default function GameCanvas({ ws, gameState, myId, attacks }: Props) {
       const oy = Math.max(0, (H - 50 - ROWS * TILE) / 2);
       ctx.translate(ox, oy);
 
-      // Floor tiles (dark theme)
-      for (let c = 0; c < COLS; c++) {
-        for (let r = 0; r < ROWS; r++) {
-          ctx.fillStyle = (c + r) % 2 === 0 ? "#1e293b" : "#1a2332";
-          ctx.fillRect(c * TILE, r * TILE, TILE, TILE);
-          ctx.strokeStyle = "#334155";
-          ctx.lineWidth = 0.3;
-          ctx.strokeRect(c * TILE, r * TILE, TILE, TILE);
+      // Floor tiles (Grassy background)
+      const roomNum = gs?.room_number || 1;
+      const bgImg = ENV_SPRITES['bg'];
+      if (bgImg && bgImg.complete && bgImg.naturalWidth) {
+        for (let c = 0; c < COLS; c++) {
+          for (let r = 0; r < ROWS; r++) {
+            ctx.drawImage(bgImg, c * TILE, r * TILE, TILE, TILE);
+          }
+        }
+      } else {
+        // Fallback grid
+        for (let c = 0; c < COLS; c++) {
+          for (let r = 0; r < ROWS; r++) {
+            ctx.fillStyle = (c + r) % 2 === 0 ? "#1e293b" : "#1a2332";
+            ctx.fillRect(c * TILE, r * TILE, TILE, TILE);
+          }
         }
       }
+
+      // Procedural Decorations
+      const seededRandom = (seed: number) => {
+        let x = Math.sin(seed++) * 10000;
+        return x - Math.floor(x);
+      };
+
+      const decos = ['stone1', 'stone2', 'stone3', 'bush1', 'bush2'];
+      let seed = roomNum * 1337;
+      
+      // Draw ~15-20 decorations per room based on room number
+      const numDecos = 10 + Math.floor(seededRandom(seed++) * 10);
+      for (let i = 0; i < numDecos; i++) {
+        const decoType = decos[Math.floor(seededRandom(seed++) * decos.length)];
+        const img = ENV_SPRITES[decoType];
+        
+        // Random position, biased towards edges so they don't block center paths too much
+        const dx = seededRandom(seed++) * (COLS * TILE);
+        const dy = seededRandom(seed++) * (ROWS * TILE);
+        // Vary the scale slightly
+        const scale = 0.8 + seededRandom(seed++) * 0.4;
+        
+        if (img && img.complete && img.naturalWidth) {
+          const w = TILE * scale;
+          const h = (img.naturalHeight / img.naturalWidth) * w;
+          ctx.drawImage(img, dx - w/2, dy - h/2, w, h);
+        }
+      }
+
       // Border
-      ctx.strokeStyle = "#475569";
-      ctx.lineWidth = 2;
+      ctx.strokeStyle = "#3e240f";
+      ctx.lineWidth = 6;
       ctx.strokeRect(0, 0, COLS * TILE, ROWS * TILE);
 
       if (gs) {
@@ -449,10 +517,10 @@ export default function GameCanvas({ ws, gameState, myId, attacks }: Props) {
 
       /* ── HUD BAR ────────────────────────────────────────── */
       const hudY = H - 50;
-      ctx.fillStyle = "#0f172a";
+      ctx.fillStyle = "#3e240f"; // wooden hud background
       ctx.fillRect(0, hudY, W, 50);
-      ctx.strokeStyle = "#334155";
-      ctx.lineWidth = 1;
+      ctx.strokeStyle = "#1e1208"; // dark wood border
+      ctx.lineWidth = 4;
       ctx.beginPath(); ctx.moveTo(0, hudY); ctx.lineTo(W, hudY); ctx.stroke();
 
       let sx = 14;
@@ -461,12 +529,12 @@ export default function GameCanvas({ ws, gameState, myId, attacks }: Props) {
         const active = sp === currentSpell;
         const col = SPELL_COLORS[sp];
         rrect(ctx, sx, hudY + 10, 86, 30, 6);
-        ctx.fillStyle = active ? col : "#1e293b";
+        ctx.fillStyle = active ? col : "#523315"; // wooden inactive btn
         ctx.fill();
-        ctx.strokeStyle = active ? col : "#475569";
-        ctx.lineWidth = active ? 2 : 1;
+        ctx.strokeStyle = active ? col : "#2e1d0d"; // wooden edge
+        ctx.lineWidth = active ? 3 : 2;
         ctx.stroke();
-        ctx.fillStyle = active ? "#fff" : "#94a3b8";
+        ctx.fillStyle = active ? "#fff" : "#d4b483"; // cream inactive text
         ctx.font = "bold 12px 'Segoe UI', sans-serif";
         ctx.textAlign = "center";
         ctx.fillText(`[${i + 1}] ${sp}`, sx + 43, hudY + 30);
@@ -478,7 +546,7 @@ export default function GameCanvas({ ws, gameState, myId, attacks }: Props) {
         const tgt = gs.enemies?.find((e: any) => e.id === tid);
         if (tgt) {
           const blocked = tgt.depends_on?.length > 0;
-          ctx.fillStyle = "#e2e8f0";
+          ctx.fillStyle = "#fde6b3"; // light yellow/cream font
           ctx.font = "bold 12px 'Segoe UI', sans-serif";
           ctx.textAlign = "right";
           const sub = getEnemySubtext(tgt);
