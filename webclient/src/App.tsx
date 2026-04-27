@@ -110,175 +110,168 @@ export default function App() {
   } catch { schemaInfo = {}; }
 
   return (
-    <div className="h-full w-full bg-gray-950 p-3 md:p-5 text-white font-sans flex flex-col md:flex-row gap-4">
+    <div className="h-full w-full bg-[#1b3d1b] p-3 md:p-5 text-[#fde6b3] font-sans flex flex-col md:flex-row gap-5">
 
-      {/* ── LEFT COLUMN ─────────────────────────────────────── */}
-      <div className="flex flex-col w-full md:w-[360px] gap-2 shrink-0 h-full pb-1 overflow-hidden">
+      {/* ── LEFT COLUMN (Wooden Board styling) ────────────────── */}
+      <div className="flex flex-col w-full md:w-[380px] gap-3 shrink-0 h-full pb-1 overflow-hidden">
 
         {/* Room Header */}
-        <div className="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-2xl p-3 shadow-lg shadow-indigo-500/20">
+        <div className="bg-[#5c3e21] border-[6px] border-[#3e240f] rounded-2xl p-3 shadow-[inset_0_0_10px_rgba(0,0,0,0.5),0_6px_12px_rgba(0,0,0,0.5)]">
           <div className="flex items-center gap-2 mb-1">
-            <span className="text-xs font-bold bg-white/20 px-2.5 py-0.5 rounded-full">ROOM {roomNum}/5</span>
+            <span className="text-xs font-bold bg-[#3e240f]/60 px-2.5 py-0.5 rounded border border-[#3e240f]">ROOM {roomNum}/5</span>
             <div className="flex items-center gap-1.5 ml-auto">
-              <div className="w-2 h-2 rounded-full bg-green-400 shadow-[0_0_8px_rgba(74,222,128,0.8)] animate-pulse"></div>
-              <span className="text-xs font-semibold text-white/80">{onlineCount} online</span>
+              <div className="w-2 h-2 rounded-full bg-[#4ade80] shadow-[0_0_8px_rgba(74,222,128,0.8)] animate-pulse"></div>
+              <span className="text-xs font-semibold text-[#fde6b3]">{onlineCount} online</span>
             </div>
           </div>
-          <h1 className="text-lg font-extrabold tracking-tight">{schemaInfo.table_name || roomName}</h1>
+          <h1 className="text-xl font-black text-[#ffdb7a] tracking-wide drop-shadow-md">{schemaInfo.table_name || roomName}</h1>
           {me && (
             <div className="flex items-center gap-3 mt-2 text-xs">
-              <span className="font-bold text-yellow-200">⭐ {me.score ?? 0} pts</span>
+              <span className="font-bold text-[#facc15] drop-shadow-sm">⭐ {me.score ?? 0} pts</span>
               <div className="flex items-center gap-1.5 flex-1">
-                <span className="font-bold text-red-200">HP</span>
-                <div className="flex-1 h-2 bg-white/20 rounded-full overflow-hidden">
+                <span className="font-bold text-[#fca5a5]">HP</span>
+                <div className="flex-1 h-3 bg-[#2e1d0d] rounded-sm overflow-hidden border border-[#3e240f]">
                   <div
-                    className={`h-full rounded-full transition-all duration-300 ${(me.hp / Math.max(1, me.max_hp)) > 0.4 ? "bg-green-400" : "bg-red-400"}`}
+                    className={`h-full transition-all duration-300 ${(me.hp / Math.max(1, me.max_hp)) > 0.4 ? "bg-[#4ade80]" : "bg-[#ef4444]"}`}
                     style={{ width: `${(me.hp / Math.max(1, me.max_hp)) * 100}%` }}
                   />
                 </div>
-                <span className="font-bold text-white/80">{me.hp}/{me.max_hp}</span>
+                <span className="font-bold text-[#fde6b3]">{me.hp}/{me.max_hp}</span>
               </div>
             </div>
           )}
         </div>
 
         {/* Mission Objective */}
-        <div className="bg-gray-900 rounded-2xl border border-gray-800 p-3">
-          <h2 className="text-xs font-extrabold text-amber-400 tracking-wider mb-2 flex items-center gap-1.5">
-            <span></span> MISSION OBJECTIVE
+        <div className="bg-[#784f2b] border-[4px] border-[#523315] rounded-xl p-3 shadow-inner">
+          <h2 className="text-sm font-black text-[#ffdb7a] tracking-wider mb-2 flex items-center gap-1.5 drop-shadow-sm">
+            <span>📜</span> MISSION OBJECTIVE
           </h2>
-          <p className="text-sm font-bold text-white leading-relaxed bg-amber-500/10 border border-amber-500/20 rounded-xl px-3 py-2">
+          <p className="text-sm font-bold text-white bg-[#523315] border-2 border-[#3e240f] rounded-lg px-3 py-2 shadow-inner">
             {objective || "Loading..."}
           </p>
           {hint && (
-            <p className="text-xs text-gray-400 mt-2 italic">
+            <p className="text-xs text-[#fde6b3]/80 mt-2 italic font-semibold">
               💡 {hint}
             </p>
           )}
           <div className="mt-3 flex items-center gap-2">
             {!gameState?.room_cleared ? (
-              <span className="text-xs font-bold text-red-400">⚔ {gameState?.targets_remaining ?? enemies.length} targets remaining</span>
+              <span className="text-xs font-bold text-[#fca5a5]">⚔ {gameState?.targets_remaining ?? enemies.length} targets remaining</span>
             ) : (
-              <span className="text-xs font-bold text-green-400">✓ All clear — walk to the portal!</span>
+              <span className="text-xs font-bold text-[#4ade80]">✓ All clear — walk to the portal!</span>
             )}
           </div>
           <div className="mt-2 flex flex-wrap gap-1.5">
             {allowedSpells.map((sp: string) => (
-              <span key={sp} className="text-[10px] font-bold bg-gray-800 border border-gray-700 px-2 py-0.5 rounded-full text-gray-300">
+              <span key={sp} className="text-[10px] font-bold bg-[#3e240f] border-2 border-[#2e1d0d] px-2 py-0.5 rounded shadow-sm text-[#fde6b3]">
                 {sp}
               </span>
             ))}
           </div>
         </div>
 
-        {/* Schema Card */}
-        {schemaInfo.columns && (
-          <div className="bg-gray-900 rounded-2xl border border-gray-800 p-3 flex flex-col shrink">
-            <h2 className="text-xs font-extrabold text-cyan-400 tracking-wider mb-2 flex items-center gap-1.5">
-              <span></span> TABLE SCHEMA
-            </h2>
-            <div className="bg-gray-950 rounded-xl border border-gray-800 overflow-hidden">
-              <div className="bg-cyan-500/10 border-b border-gray-800 px-3 py-1.5">
-                <span className="text-xs font-mono font-bold text-cyan-400">{schemaInfo.table_name}</span>
-              </div>
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="border-b border-gray-800">
-                    {schemaInfo.columns.map((col: string) => (
-                      <th key={col} className="px-2 py-1.5 text-left font-bold text-gray-400 bg-gray-900/50">{col}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {(schemaInfo.sample_data || []).map((row: any[], i: number) => (
-                    <tr key={i} className="border-b border-gray-800/50 hover:bg-gray-800/30">
-                      {row.map((cell: any, j: number) => (
-                        <td key={j} className="px-2 py-1 font-mono text-gray-300">{String(cell)}</td>
+        {/* Schema Card / Query Results */}
+        {((queryResult && queryResult.success && queryResult.columns?.length > 0) || schemaInfo.columns) && (() => {
+          const showQuery = (queryResult && queryResult.success && queryResult.columns?.length > 0);
+          const columns = showQuery ? queryResult.columns : schemaInfo.columns;
+          const rows = showQuery ? queryResult.rows : (schemaInfo.sample_data || []);
+          return (
+            <div className="bg-[#784f2b] border-[4px] border-[#523315] rounded-xl p-3 flex flex-col shrink shadow-inner overflow-hidden max-h-[220px]">
+              <h2 className="text-sm font-black text-[#ffdb7a] tracking-wider mb-2 flex items-center gap-1.5 drop-shadow-sm shrink-0">
+                <span>🗃️</span> {showQuery ? "QUERY RESULT" : "TABLE SCHEMA"}
+              </h2>
+              <div className="bg-[#523315] rounded border-[2px] border-[#3e240f] shadow-inner flex flex-col overflow-hidden">
+                <div className="bg-[#3e240f] border-b-[2px] border-[#2e1d0d] px-3 py-1.5 shrink-0 flex justify-between items-center">
+                  <span className="text-xs font-mono font-bold text-[#fde6b3] drop-shadow-sm">
+                    {schemaInfo.table_name}
+                  </span>
+                  {showQuery && (
+                    <span className="text-[10px] font-bold text-[#facc15]">{rows.length} rows</span>
+                  )}
+                </div>
+                <div className="overflow-auto bg-[#8c5f36]/10 flex-1 relative custom-scrollbar">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b-[2px] border-[#3e240f] sticky top-0 bg-[#523315]">
+                        {columns.map((col: string) => (
+                          <th key={col} className="px-2 py-1.5 text-left font-bold text-[#facc15] whitespace-nowrap">{col}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rows.map((row: any[], i: number) => (
+                        <tr key={i} className="border-b-[1px] border-[#3e240f]/50 hover:bg-[#3e240f]/30">
+                          {row.map((cell: any, j: number) => (
+                            <td key={j} className="px-2 py-1 font-mono text-[#fde6b3] whitespace-nowrap">{String(cell)}</td>
+                          ))}
+                        </tr>
                       ))}
-                    </tr>
-                  ))}
-                  <tr>
-                    <td colSpan={schemaInfo.columns.length} className="px-2 py-1 text-gray-500 text-center italic">...</td>
-                  </tr>
-                </tbody>
-              </table>
+                      {!showQuery && (
+                        <tr>
+                          <td colSpan={columns.length} className="px-2 py-1 text-[#d4b483] text-center italic">...</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* SQL Terminal */}
-        <div className="bg-gray-900 rounded-2xl border border-gray-800 p-3 flex flex-col shrink">
-          <h2 className="text-xs font-extrabold text-green-400 tracking-wider mb-2 flex items-center gap-1.5">
-            <span></span> SQL TERMINAL
+        <div className="bg-[#5c3e21] border-[6px] border-[#3e240f] rounded-2xl p-3 flex flex-col shrink shadow-[inset_0_0_10px_rgba(0,0,0,0.5),0_6px_12px_rgba(0,0,0,0.5)]">
+          <h2 className="text-sm font-black text-[#4ade80] tracking-wider mb-2 flex items-center gap-1.5 drop-shadow-sm">
+            <span>✨</span> MAGIC TERMINAL
           </h2>
           <div className="flex items-center gap-2 mb-2">
-            <span className="text-green-400 font-mono text-sm font-bold">$</span>
+            <span className="text-[#4ade80] font-mono text-xl font-bold">»</span>
             <input
               type="text"
               value={sqlInput}
               onChange={(e) => setSqlInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && sendQuery()}
-              placeholder={`SELECT * FROM ${schemaInfo.table_name || roomName} WHERE ...`}
-              className="flex-1 bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-xs font-mono text-green-300 placeholder-gray-600 focus:outline-none focus:border-green-500/50 transition-colors"
+              placeholder={`SELECT * FROM ${schemaInfo.table_name || roomName} ...`}
+              className="flex-1 bg-[#2e1d0d] border-[3px] border-[#1e1208] rounded px-3 py-2 text-sm font-mono text-[#4ade80] placeholder-[#784f2b] focus:outline-none focus:border-[#4ade80] transition-colors shadow-inner"
             />
             <button
               onClick={sendQuery}
-              className="bg-green-600 hover:bg-green-500 text-white font-bold px-3 py-2 rounded-lg text-xs transition-colors cursor-pointer"
+              className="bg-[#d97706] hover:bg-[#b45309] active:bg-[#92400e] text-[#fde6b3] border-b-[4px] border-[#92400e] active:border-b-0 active:translate-y-[4px] font-black tracking-wider px-4 py-2 rounded-lg text-sm transition-all focus:outline-none"
             >
               RUN
             </button>
           </div>
-          {queryResult && queryResult.success && queryResult.columns?.length > 0 && (
-            <div className="bg-gray-950 rounded-lg border border-gray-800 overflow-x-auto max-h-40 overflow-y-auto">
-              <table className="w-full text-[10px] font-mono">
-                <thead>
-                  <tr className="border-b border-gray-700 sticky top-0 bg-gray-900">
-                    {queryResult.columns.map((col: string) => (
-                      <th key={col} className="px-2 py-1 text-left font-bold text-green-400">{col}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {queryResult.rows.map((row: any[], i: number) => (
-                    <tr key={i} className="border-b border-gray-800/50 hover:bg-gray-800/30">
-                      {row.map((cell: any, j: number) => (
-                        <td key={j} className="px-2 py-1 text-gray-300">{String(cell)}</td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+          {/* The query result table is now merged into the Schema Card above */}
           {queryResult && !queryResult.success && (
             <p className="text-xs text-red-400 font-mono mt-1">Error: {queryResult.message}</p>
           )}
         </div>
 
         {/* Chat */}
-        <div className="bg-gray-900 rounded-2xl border border-gray-800 flex flex-col p-3 flex-1 min-h-[120px]">
+        <div className="bg-[#784f2b] border-[4px] border-[#523315] rounded-xl flex flex-col p-3 flex-1 min-h-[120px] shadow-inner">
           <div className="flex justify-between items-center mb-2">
-            <h2 className="text-xs font-extrabold text-gray-400 tracking-wider flex items-center gap-1.5">
+            <h2 className="text-sm font-black text-[#ffdb7a] tracking-wider flex items-center gap-1.5 drop-shadow-sm">
               <span>💬</span> CHAT & LOG
             </h2>
             <button
               onClick={() => setMessages([])}
-              className="text-[10px] text-gray-400 font-bold bg-gray-800 hover:bg-gray-700 px-2.5 py-1 rounded-full transition-colors cursor-pointer"
+              className="text-[10px] text-[#fde6b3] font-bold bg-[#523315] hover:bg-[#3e240f] px-2.5 py-1 rounded shadow-inner transition-colors cursor-pointer"
             >
               Clear
             </button>
           </div>
           <div className="flex-1 overflow-y-auto flex flex-col gap-1 text-xs">
             {messages.length === 0 && (
-              <p className="text-gray-600 text-[10px] text-center mt-6">No messages yet...</p>
+              <p className="text-[#fde6b3]/50 text-[10px] text-center mt-6">No messages yet...</p>
             )}
             {messages.map((m, i) => (
-              <div key={i} className={`px-2.5 py-1.5 rounded-lg max-w-full break-words text-[11px] font-medium ${
-                m.startsWith("✅") ? "bg-green-500/10 text-green-300" :
-                m.startsWith("❌") ? "bg-red-500/10 text-red-300" :
-                m.startsWith("🔍") ? "bg-blue-500/10 text-blue-300 font-mono" :
-                m.startsWith("📊") ? "bg-purple-500/10 text-purple-300" :
-                "bg-gray-800/50 text-gray-300"
+              <div key={i} className={`px-2.5 py-1.5 rounded-lg max-w-full break-words text-[11px] font-bold ${
+                m.startsWith("✅") ? "bg-[#4ade80]/20 text-[#4ade80] border border-[#4ade80]/30" :
+                m.startsWith("❌") ? "bg-[#ef4444]/20 text-[#fca5a5] border border-[#ef4444]/30" :
+                m.startsWith("🔍") ? "bg-[#38bdf8]/20 text-[#bae6fd] border border-[#38bdf8]/30 font-mono" :
+                m.startsWith("📊") ? "bg-[#c084fc]/20 text-[#e9d5ff] border border-[#c084fc]/30" :
+                "bg-[#523315] text-[#fde6b3] shadow-inner"
               }`}>
                 {m}
               </div>
@@ -292,11 +285,11 @@ export default function App() {
               onChange={(e) => setInputVal(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && sendChat()}
               placeholder="Chat..."
-              className="flex-1 bg-gray-950 border border-gray-800 rounded-full px-3 py-1.5 text-xs text-white font-medium focus:outline-none focus:border-gray-600 transition-colors"
+              className="flex-1 bg-[#2e1d0d] border-[2px] border-[#1e1208] rounded px-3 py-1.5 text-xs text-[#fde6b3] font-medium focus:outline-none focus:border-[#d97706] transition-colors shadow-inner"
             />
             <button
               onClick={sendChat}
-              className="bg-gray-700 hover:bg-gray-600 text-white font-bold px-3 py-1.5 rounded-full text-xs transition-colors cursor-pointer"
+              className="bg-[#d97706] hover:bg-[#b45309] active:bg-[#92400e] text-[#fde6b3] font-bold px-3 py-1.5 rounded text-xs transition-colors cursor-pointer border-b-[3px] border-[#92400e] active:border-b-0 active:translate-y-[3px]"
             >
               Send
             </button>
@@ -304,13 +297,13 @@ export default function App() {
         </div>
 
         {/* Controls */}
-        <div className="bg-gray-900 rounded-2xl border border-gray-800 p-2">
-          <h2 className="text-[10px] font-extrabold text-gray-500 tracking-wider mb-2">CONTROLS</h2>
-          <div className="flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-gray-400 font-semibold">
-            <span><b className="text-white">WASD</b> move</span>
-            <span><b className="text-white">1-5</b> spell</span>
-            <span><b className="text-white">E</b> cast</span>
-            <span><b className="text-white">R</b> reset</span>
+        <div className="bg-[#5c3e21] border-[4px] border-[#3e240f] rounded-xl p-2 shadow-inner">
+          <h2 className="text-[10px] font-black text-[#d4b483] tracking-wider mb-2">CONTROLS</h2>
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-[#fde6b3] font-semibold">
+            <span><b className="text-[#ffdb7a]">WASD</b> move</span>
+            <span><b className="text-[#ffdb7a]">1-5</b> spell</span>
+            <span><b className="text-[#ffdb7a]">E</b> cast</span>
+            <span><b className="text-[#ffdb7a]">R</b> reset</span>
           </div>
         </div>
       </div>
@@ -318,12 +311,12 @@ export default function App() {
       {/* ── RIGHT COLUMN: Canvas ─────────────────────────────── */}
       <div className="flex flex-col w-full flex-1 h-full min-w-0">
         {/* Brief */}
-        <div className="w-full bg-gray-900 rounded-t-2xl border border-b-0 border-gray-800 px-4 py-3 shrink-0">
-          <pre className="text-gray-300 whitespace-pre-wrap font-mono leading-relaxed text-[11px] font-semibold">
+        <div className="w-full bg-[#3e240f] rounded-t-2xl border-[6px] border-b-0 border-[#2e1d0d] px-4 py-3 shrink-0 shadow-inner">
+          <pre className="text-[#4ade80] whitespace-pre-wrap font-mono leading-relaxed text-[12px] font-bold">
             {brief || "Connecting..."}
           </pre>
         </div>
-        <div className="bg-gray-900 rounded-b-2xl border border-gray-800 w-full flex-1 relative overflow-hidden min-h-[400px]">
+        <div className="bg-[#1b3d1b] rounded-b-2xl border-[6px] border-t-0 border-[#2e1d0d] w-full flex-1 relative overflow-hidden min-h-[400px]">
           <GameCanvas ws={ws} gameState={gameState} myId={myId} attacks={attacks} />
         </div>
       </div>
