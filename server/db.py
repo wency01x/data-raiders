@@ -168,13 +168,13 @@ def init_db():
             2, "employees_dept", "enemies_room2", 0,
             (
                 "ROOM 2 — DELETE WHERE\n"
-                "Table: employees (id, name, dept, salary)\n"
+                "Table: employees_dept (id, name, dept, salary)\n"
                 "The BUGS department is infesting the database!\n"
                 "DELETE only employees from the 'BUGS' department."
             ),
             "Clear out all employees belonging to the BUGS department.",
             json.dumps({
-                "table_name": "employees",
+                "table_name": "employees_dept",
                 "columns": ["id", "name", "dept", "salary"],
                 "sample_data": [
                     [1, "Carol", "BUGS", 40000],
@@ -188,13 +188,13 @@ def init_db():
             3, "employees_salary", "enemies_room3", 0,
             (
                 "ROOM 3 — UPDATE SET\n"
-                "Table: employees (id, name, role, salary)\n"
+                "Table: employees_salary (id, name, role, salary)\n"
                 "The Devs are underpaid! Their salary should be doubled.\n"
-                "Use UPDATE on employees WHERE role = 'Dev'."
+                "Use UPDATE on employees_salary WHERE role = 'Dev'."
             ),
             "Increase the salary of all Developers using the UPDATE spell.",
             json.dumps({
-                "table_name": "employees",
+                "table_name": "employees_salary",
                 "columns": ["id", "name", "role", "salary"],
                 "sample_data": [
                     [1, "Eve", "Dev", 50000],
@@ -208,14 +208,14 @@ def init_db():
             4, "employees_fk", "enemies_room4", 0,
             (
                 "ROOM 4 — FK CONSTRAINTS\n"
-                "Table: employees (id, name, manager_id)\n"
+                "Table: employees_fk (id, name, manager_id)\n"
                 "manager_id references another employee's id.\n"
                 "You must DELETE child rows BEFORE parent rows!\n"
                 "Delete in the correct order or suffer HP penalties."
             ),
             "Remove the entire management chain from the bottom up.",
             json.dumps({
-                "table_name": "employees",
+                "table_name": "employees_fk",
                 "columns": ["id", "name", "manager_id"],
                 "sample_data": [
                     [1, "CEO", "NULL"],
