@@ -6,6 +6,12 @@ import archerAtk from './assets/Archer/Attack_1.png';
 import swordsmanAtk from './assets/Swordsman/Attack_1.png';
 import wizardAtk from './assets/Wizard/Attack_1.png';
 import portalSprite from './assets/35.png';
+import slime1Idle from './assets/mobs/PNG/Slime1/Without_shadow/Slime1_Idle_without_shadow.png';
+import slime1Atk  from './assets/mobs/PNG/Slime1/Without_shadow/Slime1_Attack_without_shadow.png';
+import slime2Idle from './assets/mobs/PNG/Slime2/Without_shadow/Slime2_Idle_without_shadow.png';
+import slime2Atk  from './assets/mobs/PNG/Slime2/Without_shadow/Slime2_Attack_without_shadow.png';
+import slime3Idle from './assets/mobs/PNG/Slime3/Without_shadow/Slime3_Idle_without_shadow.png';
+import slime3Atk  from './assets/mobs/PNG/Slime3/Without_shadow/Slime3_Attack_without_shadow.png';
 
 const TILE = 56;
 const COLS = 16;
@@ -77,6 +83,37 @@ if (typeof window !== "undefined") {
   });
 }
 const CHAR_CLASSES = ['Archer', 'Swordsman', 'Wizard'];
+
+/* ── Slime sprites (enemy mobs) ────────────────────────────────── */
+const SLIME_SPRITES: Record<string, HTMLImageElement> = {};
+if (typeof window !== "undefined") {
+  const loads: [string, string][] = [
+    ['slime1Idle', slime1Idle], ['slime1Atk', slime1Atk],
+    ['slime2Idle', slime2Idle], ['slime2Atk', slime2Atk],
+    ['slime3Idle', slime3Idle], ['slime3Atk', slime3Atk],
+  ];
+  loads.forEach(([key, src]) => {
+    const img = new Image(); img.src = src;
+    SLIME_SPRITES[key] = img;
+  });
+}
+
+/* Draw one frame from a slime spritesheet (6 cols × 4 rows grid) */
+function drawSlimeFrame(
+  ctx: CanvasRenderingContext2D,
+  img: HTMLImageElement,
+  frameIndex: number,
+  dx: number, dy: number, dw: number, dh: number,
+) {
+  if (!img.complete || !img.naturalWidth) return false;
+  const cols = 6;
+  const frameW = img.naturalWidth / cols;
+  const fi = frameIndex % cols; // Loop only the first row (front animation)
+  const col = fi;
+  const row = 0;
+  ctx.drawImage(img, col * frameW, row * frameW, frameW, frameW, dx, dy, dw, dh);
+  return true;
+}
 
 function getCharClass(name: string) {
   let hash = 0;
@@ -254,23 +291,37 @@ export default function GameCanvas({ ws, gameState, myId, attacks }: Props) {
         for (const e of gs.enemies || []) {
           if (!e.alive) continue;
           const blocked = e.depends_on?.length > 0;
-          const borderCol = blocked ? "#f59e0b" : "#ef4444";
-          const fillCol   = blocked ? "rgba(245,158,11,0.15)" : "rgba(239,68,68,0.15)";
-          const ex = e.x + 4, ey = e.y + 4, ew = TILE - 8;
+          const isTarget: boolean = e.is_target ?? true;
 
-          // body
-          rrect(ctx, ex, ey, ew, ew, 6);
-          ctx.fillStyle = fillCol; ctx.fill();
-          ctx.lineWidth = 2.5; ctx.strokeStyle = borderCol; ctx.stroke();
+          // Pick sprite based on civilian vs target
+          const atkTime = atkRef.current["enemy_" + e.id] || 0;
+          const elapsed = Date.now() - atkTime;
+          const isBeingHit = elapsed < 400;
+          
+          // Randomize visual based on ID consistently so it doesn't reveal who is a target
+          // (e.id % 3) will be 0, 1, or 2. Add 1 to get Slime 1, 2, or 3.
+          const slimeType = (e.id % 3) + 1; 
 
-          // face
-          ctx.fillStyle = borderCol;
-          ctx.fillRect(e.x + 14, e.y + 16, 8, 4);
-          ctx.fillRect(e.x + 30, e.y + 16, 8, 4);
-          ctx.beginPath();
-          ctx.moveTo(e.x + 16, e.y + 30);
-          ctx.lineTo(e.x + TILE - 16, e.y + 30);
-          ctx.lineWidth = 2; ctx.strokeStyle = borderCol; ctx.stroke();
+          const idleImg = SLIME_SPRITES[`slime${slimeType}Idle`];
+          const atkImg  = SLIME_SPRITES[`slime${slimeType}Atk`];
+          const spriteImg = isBeingHit && atkImg ? atkImg : idleImg;
+
+          const spriteSize = TILE * 1.25;
+          const sdx = e.x + (TILE - spriteSize) / 2;
+          const sdy = e.y + (TILE - spriteSize) / 2 - 8;
+          const frameIdx = Math.floor(Date.now() / 120);
+
+          const drawn = spriteImg ? drawSlimeFrame(ctx, spriteImg, frameIdx, sdx, sdy, spriteSize, spriteSize) : false;
+
+          // Fallback: draw colored box if sprite not ready
+          if (!drawn) {
+            const borderCol = "#ef4444";
+            const fillCol   = "rgba(239,68,68,0.15)";
+            const ex2 = e.x + 4, ey2 = e.y + 4, ew2 = TILE - 8;
+            rrect(ctx, ex2, ey2, ew2, ew2, 6);
+            ctx.fillStyle = fillCol; ctx.fill();
+            ctx.lineWidth = 2.5; ctx.strokeStyle = borderCol; ctx.stroke();
+          }
 
           // Name label above
           ctx.fillStyle = "#e2e8f0";
@@ -278,13 +329,14 @@ export default function GameCanvas({ ws, gameState, myId, attacks }: Props) {
           ctx.textAlign = "center";
           ctx.fillText((e.label || "?").substring(0, 10), e.x + TILE / 2, e.y - 12);
 
-
           // HP bar
+          const ex = e.x + 4, ey = e.y + 4, ew = TILE - 8;
           const ratio = Math.max(0, e.hp / Math.max(1, e.max_hp));
           const bx = ex + 2, by = ey + ew - 7, bw = ew - 4;
+          const hpCol = "#ef4444"; // Same color for everyone to hide identity
           ctx.fillStyle = "#1e293b";
           rrect(ctx, bx, by, bw, 5, 2); ctx.fill();
-          ctx.fillStyle = borderCol;
+          ctx.fillStyle = hpCol;
           rrect(ctx, bx, by, bw * ratio, 5, 2); ctx.fill();
 
           // Lock badge
@@ -298,7 +350,6 @@ export default function GameCanvas({ ws, gameState, myId, attacks }: Props) {
           if (e.id === tid) {
             rrect(ctx, ex - 3, ey - 3, ew + 6, ew + 6, 9);
             ctx.lineWidth = 3; ctx.strokeStyle = "#3b82f6"; ctx.stroke();
-            // Pulsing glow
             const pulse = 0.3 + Math.sin(Date.now() / 200) * 0.2;
             ctx.shadowColor = "#3b82f6";
             ctx.shadowBlur = 15 * pulse;
