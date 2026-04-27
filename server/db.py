@@ -149,7 +149,7 @@ def init_db():
                 "Use SELECT to identify them, then DELETE only the corrupted ones!"
             ),
             # objective
-            "DELETE all rows WHERE status = 'CORRUPTED'",
+            "Eliminate all the corrupted employee records.",
             # schema_info
             json.dumps({
                 "table_name": "employees",
@@ -172,7 +172,7 @@ def init_db():
                 "The BUGS department is infesting the database!\n"
                 "DELETE only employees from the 'BUGS' department."
             ),
-            "DELETE all rows WHERE dept = 'BUGS'",
+            "Clear out all employees belonging to the BUGS department.",
             json.dumps({
                 "table_name": "employees",
                 "columns": ["id", "name", "dept", "salary"],
@@ -192,7 +192,7 @@ def init_db():
                 "The Devs are underpaid! Their salary should be doubled.\n"
                 "Use UPDATE on employees WHERE role = 'Dev'."
             ),
-            "UPDATE salary (use UPDATE spell) on rows WHERE role = 'Dev'",
+            "Increase the salary of all Developers using the UPDATE spell.",
             json.dumps({
                 "table_name": "employees",
                 "columns": ["id", "name", "role", "salary"],
@@ -213,7 +213,7 @@ def init_db():
                 "You must DELETE child rows BEFORE parent rows!\n"
                 "Delete in the correct order or suffer HP penalties."
             ),
-            "DELETE all rows respecting FK constraints (children before parents)",
+            "Remove the entire management chain from the bottom up.",
             json.dumps({
                 "table_name": "employees",
                 "columns": ["id", "name", "manager_id"],
@@ -236,7 +236,7 @@ def init_db():
                 "Phase 2: Use UPDATE to exploit the weakness.\n"
                 "Phase 3: Use DELETE to finish it off!"
             ),
-            "SELECT to find weakness → UPDATE to weaken → DELETE to destroy",
+            "Discover the boss's weakness, weaken its defenses, then destroy it.",
             json.dumps({
                 "table_name": "sys_corrupted",
                 "columns": ["id", "name", "weakness", "phase"],
