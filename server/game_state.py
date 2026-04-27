@@ -41,6 +41,8 @@ class Enemy:
         if self.depends_on is None:
             self.depends_on = []
 
+    is_target: bool = True
+
     def to_dict(self):
         d = {
             "id": self.id, "label": self.label,
@@ -49,6 +51,7 @@ class Enemy:
             "y": self.tile_y * TILE_SIZE,
             "alive": self.alive,
             "depends_on": self.depends_on,
+            "is_target": self.is_target,
         }
         d.update(self.extra)
         return d
@@ -140,6 +143,16 @@ class GameState:
                       alive=bool(row["alive"]),
                       depends_on=dep_ids,
                       extra=extra)
+            # Determine if this enemy is a target based on room rules
+            rn = self.room_number
+            if rn == 1:
+                e.is_target = extra.get("status") == "CORRUPTED"
+            elif rn == 2:
+                e.is_target = extra.get("dept") == "BUGS"
+            elif rn == 3:
+                e.is_target = extra.get("role") == "Dev"
+            else:
+                e.is_target = True  # rooms 4 & 5: all enemies are targets
             self.enemies[e.id] = e
 
     def load_loot(self, rows):
