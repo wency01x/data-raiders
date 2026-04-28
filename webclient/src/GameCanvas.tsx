@@ -21,8 +21,8 @@ import bush1Src  from './assets/background/2 Objects/9 Bush/1.png';
 import bush2Src  from './assets/background/2 Objects/9 Bush/2.png';
 
 const TILE = 56;
-const COLS = 16;
-const ROWS = 12;
+const COLS = 20;
+const ROWS = 14;
 
 interface Props {
   ws: WebSocket | null;
@@ -242,33 +242,36 @@ export default function GameCanvas({ ws, gameState, myId, attacks }: Props) {
     let raf = 0;
 
     const draw = () => {
-      const W = cvs.width, H = cvs.height;
+      const gw = COLS * TILE;
+      const gh = ROWS * TILE;
+      const W = gw;
+      const H = gh + 50;
+
+      if (cvs.width !== W) cvs.width = W;
+      if (cvs.height !== H) cvs.height = H;
+
       ctx.imageSmoothingEnabled = false;
       const gs = gsRef.current;
       const currentMyId = idRef.current;
       const currentSpell = spellRef.current;
       const tid = nearestEnemy(gs, currentMyId);
 
-      // Dark background
-      ctx.fillStyle = "#1b3d1b";
-      ctx.fillRect(0, 0, W, H);
-
-      ctx.save();
-      const ox = Math.max(0, (W - COLS * TILE) / 2);
-      const oy = Math.max(0, (H - 50 - ROWS * TILE) / 2);
-      ctx.translate(ox, oy);
-
-      // Floor tiles (Grassy background)
+      // Tiled Background
       const roomNum = gs?.room_number || 1;
       const bgImg = ENV_SPRITES['bg'];
       if (bgImg && bgImg.complete && bgImg.naturalWidth) {
-        for (let c = 0; c < COLS; c++) {
-          for (let r = 0; r < ROWS; r++) {
-            ctx.drawImage(bgImg, c * TILE, r * TILE, TILE, TILE);
-          }
-        }
+        let pat = ctx.createPattern(bgImg, "repeat");
+        ctx.fillStyle = pat || "#1b3d1b";
+        ctx.fillRect(0, 0, W, H);
       } else {
-        // Fallback grid
+        ctx.fillStyle = "#1b3d1b";
+        ctx.fillRect(0, 0, W, H);
+      }
+
+      ctx.save();
+
+      // Fallback floor tiles if image not loaded
+      if (!bgImg || !bgImg.complete || !bgImg.naturalWidth) {
         for (let c = 0; c < COLS; c++) {
           for (let r = 0; r < ROWS; r++) {
             ctx.fillStyle = (c + r) % 2 === 0 ? "#1e293b" : "#1a2332";
@@ -513,10 +516,8 @@ export default function GameCanvas({ ws, gameState, myId, attacks }: Props) {
         }
       }
 
-      ctx.restore();
-
       /* ── HUD BAR ────────────────────────────────────────── */
-      const hudY = H - 50;
+      const hudY = ROWS * TILE;
       ctx.fillStyle = "#3e240f"; // wooden hud background
       ctx.fillRect(0, hudY, W, 50);
       ctx.strokeStyle = "#1e1208"; // dark wood border
@@ -552,10 +553,12 @@ export default function GameCanvas({ ws, gameState, myId, attacks }: Props) {
           const sub = getEnemySubtext(tgt);
           ctx.fillText(
             `TARGET: [${tgt.label}] ${sub ? "(" + sub.substring(0, 15) + ")" : ""}  HP:${tgt.hp}/${tgt.max_hp}  ${blocked ? "🔒FK" : "✓"}`,
-            W - 14, hudY + 30
+            gw - 14, hudY + 30
           );
         }
       }
+
+      ctx.restore();
 
       raf = requestAnimationFrame(draw);
     };
@@ -568,11 +571,11 @@ export default function GameCanvas({ ws, gameState, myId, attacks }: Props) {
   return (
     <canvas
       ref={canvasRef}
-      width={920}
-      height={720}
+      width={896}
+      height={722}
       tabIndex={0}
       className="absolute inset-0 w-full h-full outline-none"
-      style={{ objectFit: 'contain' }}
+      style={{ imageRendering: 'pixelated' }}
     />
   );
 }
