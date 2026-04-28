@@ -13,3 +13,5 @@ shared/__pycache__
 webclient/__pycache__
 
 webclient/node_modules
+
+*.db
