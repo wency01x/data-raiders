@@ -109,6 +109,10 @@ export default function App() {
     schemaInfo = JSON.parse(gameState?.schema_info ?? "{}");
   } catch { schemaInfo = {}; }
 
+  useEffect(() => {
+    setQueryResult(null);
+  }, [roomNum]);
+
   return (
     <div className="h-full w-full bg-[#1b3d1b] p-3 md:p-5 text-[#fde6b3] font-sans flex flex-col md:flex-row gap-5">
 
@@ -223,7 +227,7 @@ export default function App() {
         {/* SQL Terminal */}
         <div className="bg-[#5c3e21] border-[6px] border-[#3e240f] rounded-2xl p-3 flex flex-col shrink shadow-[inset_0_0_10px_rgba(0,0,0,0.5),0_6px_12px_rgba(0,0,0,0.5)]">
           <h2 className="text-sm font-black text-[#4ade80] tracking-wider mb-2 flex items-center gap-1.5 drop-shadow-sm">
-            <span>✨</span> MAGIC TERMINAL
+            <span></span> TERMINAL
           </h2>
           <div className="flex items-center gap-2 mb-2">
             <span className="text-[#4ade80] font-mono text-xl font-bold">»</span>
@@ -251,8 +255,8 @@ export default function App() {
         {/* Chat */}
         <div className="bg-[#784f2b] border-[4px] border-[#523315] rounded-xl flex flex-col p-3 flex-1 min-h-[120px] shadow-inner">
           <div className="flex justify-between items-center mb-2">
-            <h2 className="text-sm font-black text-[#ffdb7a] tracking-wider flex items-center gap-1.5 drop-shadow-sm">
-              <span>💬</span> CHAT & LOG
+            <h2 className="text-sm font-black text-[#ffdb7a] tracking-wider flex items-center drop-shadow-sm">
+              LOGS
             </h2>
             <button
               onClick={() => setMessages([])}
@@ -266,14 +270,13 @@ export default function App() {
               <p className="text-[#fde6b3]/50 text-[10px] text-center mt-6">No messages yet...</p>
             )}
             {messages.map((m, i) => (
-              <div key={i} className={`px-2.5 py-1.5 rounded-lg max-w-full break-words text-[11px] font-bold ${
-                m.startsWith("✅") ? "bg-[#4ade80]/20 text-[#4ade80] border border-[#4ade80]/30" :
-                m.startsWith("❌") ? "bg-[#ef4444]/20 text-[#fca5a5] border border-[#ef4444]/30" :
-                m.startsWith("🔍") ? "bg-[#38bdf8]/20 text-[#bae6fd] border border-[#38bdf8]/30 font-mono" :
-                m.startsWith("📊") ? "bg-[#c084fc]/20 text-[#e9d5ff] border border-[#c084fc]/30" :
-                "bg-[#523315] text-[#fde6b3] shadow-inner"
-              }`}>
-                {m}
+              <div key={i} className={`px-2.5 py-1.5 rounded-lg max-w-full break-words text-[11px] font-bold ${m.startsWith("✅") ? "bg-[#4ade80]/20 text-[#4ade80] border border-[#4ade80]/30" :
+                  m.startsWith("❌") ? "bg-[#ef4444]/20 text-[#fca5a5] border border-[#ef4444]/30" :
+                    m.startsWith("🔍") ? "bg-[#38bdf8]/20 text-[#bae6fd] border border-[#38bdf8]/30 font-mono" :
+                      m.startsWith("📊") ? "bg-[#c084fc]/20 text-[#e9d5ff] border border-[#c084fc]/30" :
+                        "bg-[#523315] text-[#fde6b3] shadow-inner"
+                }`}>
+                {m.replace(/^[✅❌🔍📊⚡👋⚔⟳]\s*/, "")}
               </div>
             ))}
             <div ref={chatEndRef} />
@@ -289,7 +292,7 @@ export default function App() {
             />
             <button
               onClick={sendChat}
-              className="bg-[#d97706] hover:bg-[#b45309] active:bg-[#92400e] text-[#fde6b3] font-bold px-3 py-1.5 rounded text-xs transition-colors cursor-pointer border-b-[3px] border-[#92400e] active:border-b-0 active:translate-y-[3px]"
+              className="bg-[#d97706] hover:bg-[#b45309] active:bg-[#92400e] text-[#fde6b3] font-bold px-4 py-1.5 rounded text-xs transition-colors cursor-pointer"
             >
               Send
             </button>
@@ -310,13 +313,7 @@ export default function App() {
 
       {/* ── RIGHT COLUMN: Canvas ─────────────────────────────── */}
       <div className="flex flex-col w-full flex-1 h-full min-w-0">
-        {/* Brief */}
-        <div className="w-full bg-[#3e240f] rounded-t-2xl border-[6px] border-b-0 border-[#2e1d0d] px-4 py-3 shrink-0 shadow-inner">
-          <pre className="text-[#4ade80] whitespace-pre-wrap font-mono leading-relaxed text-[12px] font-bold">
-            {brief || "Connecting..."}
-          </pre>
-        </div>
-        <div className="bg-[#1b3d1b] rounded-b-2xl border-[6px] border-t-0 border-[#2e1d0d] w-full flex-1 relative overflow-hidden min-h-[400px]">
+        <div className="w-full flex-1 relative overflow-hidden min-h-[400px]">
           <GameCanvas ws={ws} gameState={gameState} myId={myId} attacks={attacks} />
         </div>
       </div>
