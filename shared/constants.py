@@ -3,8 +3,8 @@ SERVER_PORT = 8000
 WS_URL      = f"ws://{SERVER_HOST}:{SERVER_PORT}/ws"
 
 TILE_SIZE    = 56          # was 40 — bigger tiles = more readable
-MAP_COLS     = 16          # was 20
-MAP_ROWS     = 12          # was 15
+MAP_COLS     = 20
+MAP_ROWS     = 14
 PLAYER_SPEED = 5
 TICK_RATE    = 60
 
