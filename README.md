@@ -41,14 +41,7 @@ In a separate terminal, navigate to the `webclient/` directory and start the Vit
 ```bash
 cd webclient
 npm run dev
-```
-*Open the provided local URL in your browser to play the game.*
 
-### 3. Start the Pygame Client (Optional)
-If you prefer the original desktop client, from the root directory:
-```bash
-python client/main.py
-```
 
 ## Features
 - **SQL-Based Mechanics**: Dependency-based SQL deletion gameplay mechanics with HP penalties.
