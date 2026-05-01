@@ -8,6 +8,7 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showLobby, setShowLobby] = useState(false);
   const [showHowToPlay, setShowHowToPlay] = useState(false);
+  const [showQuitConfirm, setShowQuitConfirm] = useState(false);
   const [useCRT, setUseCRT] = useState(false);
   const [tutorialStep, setTutorialStep] = useState(0);
   
@@ -485,7 +486,7 @@ export default function App() {
 
       {/* ── CENTER COLUMN (Canvas) ─────────────────────── */}
       <div className="flex flex-col w-full flex-1 h-full min-w-0 border-[6px] border-[#3e240f] rounded-2xl overflow-hidden shadow-[0_0_15px_rgba(0,0,0,0.5)] relative">
-        <GameCanvas ws={ws} gameState={gameState} myId={myId} attacks={attacks} />
+        <GameCanvas ws={ws} gameState={gameState} myId={myId} attacks={attacks} onRequestQuit={() => setShowQuitConfirm(true)} />
       </div>
 
       {/* ── RIGHT COLUMN (Interaction) ─────────────────── */}
@@ -629,6 +630,32 @@ export default function App() {
             >
               {tutorialStep === 6 ? "START" : "NEXT ➔"}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── QUIT CONFIRM OVERLAY ──────────────────────────── */}
+      {showQuitConfirm && (
+        <div className="absolute inset-0 bg-black/80 flex items-center justify-center z-50">
+          <div className="bg-[#784f2b] border-[4px] border-[#523315] rounded-2xl p-6 w-80 shadow-2xl flex flex-col gap-5 transform transition-all scale-100">
+            <h2 className="text-3xl font-pixelify text-[#ef4444] tracking-wider text-center drop-shadow-md">QUIT GAME?</h2>
+            <div className="bg-[#5c3e21] p-4 rounded-xl border-2 border-[#3e240f] text-center">
+              <p className="text-sm font-bold text-[#fde6b3] tracking-wider">Are you sure you want to return to the main menu?</p>
+            </div>
+            <div className="flex gap-3 mt-2">
+              <button 
+                onClick={() => setShowQuitConfirm(false)}
+                className="flex-1 bg-[#5c3e21] hover:bg-[#3e240f] text-[#d4b483] border-b-[4px] border-[#3e240f] active:border-b-0 active:translate-y-[4px] font-bold py-3 rounded-lg transition-all text-sm"
+              >
+                CANCEL
+              </button>
+              <button 
+                onClick={() => { setShowQuitConfirm(false); setView('TITLE'); }}
+                className="flex-1 bg-[#ef4444] hover:bg-[#dc2626] active:bg-[#b91c1c] text-[#fde6b3] border-b-[4px] border-[#b91c1c] active:border-b-0 active:translate-y-[4px] font-bold py-3 rounded-lg transition-all text-sm shadow-[0_0_10px_rgba(239,68,68,0.5)]"
+              >
+                QUIT
+              </button>
+            </div>
           </div>
         </div>
       )}
