@@ -29,6 +29,7 @@ interface Props {
   gameState: any;
   myId: string | null;
   attacks: Record<string, number>;
+  onRequestQuit: () => void;
 }
 
 /* ── nearest-enemy helper ─────────────────────────────────────── */
@@ -169,7 +170,7 @@ function getEnemySubtext(e: any): string {
   return parts.join(" | ");
 }
 
-export default function GameCanvas({ ws, gameState, myId, attacks }: Props) {
+export default function GameCanvas({ ws, gameState, myId, attacks, onRequestQuit }: Props) {
   const portalImg = useRef<HTMLImageElement | null>(null);
   useEffect(() => {
     const img = new Image();
@@ -583,10 +584,25 @@ export default function GameCanvas({ ws, gameState, myId, attacks }: Props) {
           const sub = getEnemySubtext(tgt);
           ctx.fillText(
             `TARGET: [${tgt.label}] ${sub ? "(" + sub.substring(0, 15) + ")" : ""}  HP:${tgt.hp}/${tgt.max_hp}  ${blocked ? "🔒FK" : "✓"}`,
-            gw - 14, hudY + 30
+            gw - 14 - 86 - 20, hudY + 30
           );
         }
       }
+
+      // Quit Button
+      const quitW = 86;
+      const quitX = gw - 14 - quitW;
+      const quitY = hudY + 10;
+      rrect(ctx, quitX, quitY, quitW, 30, 6);
+      ctx.fillStyle = "#523315"; // wooden inactive btn
+      ctx.fill();
+      ctx.strokeStyle = "#2e1d0d"; // wooden edge
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.fillStyle = "#ef4444"; // red text for quit
+      ctx.font = "bold 12px 'Segoe UI', sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("QUIT", quitX + quitW / 2, hudY + 30);
 
       ctx.restore();
 
@@ -606,6 +622,17 @@ export default function GameCanvas({ ws, gameState, myId, attacks }: Props) {
     const scaleY = cvs.height / rect.height;
     const x = (e.clientX - rect.left) * scaleX;
     const y = (e.clientY - rect.top) * scaleY;
+
+    // Check Quit button
+    const gw = COLS * TILE;
+    const hudY = ROWS * TILE;
+    const quitW = 86;
+    const quitX = gw - 14 - quitW;
+    const quitY = hudY + 10;
+    if (x >= quitX && x <= quitX + quitW && y >= quitY && y <= quitY + 30) {
+      onRequestQuit();
+      return;
+    }
 
     const gs = gsRef.current;
     if (!gs) return;
