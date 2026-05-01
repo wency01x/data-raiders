@@ -38,3 +38,37 @@ body {
   scrollbar-width: thin;
   scrollbar-color: #a67440 #3e240f;
 }
+
+/* CRT Scanline Effect */
+.crt::before {
+  content: " ";
+  display: block;
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  right: 0;
+  background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+  z-index: 50;
+  background-size: 100% 4px, 3px 100%;
+  pointer-events: none;
+}
+
+/* Scrolling Grid Background */
+.bg-scrolling-grid {
+  background-color: #0d1f0d;
+  background-image: 
+    linear-gradient(rgba(74, 222, 128, 0.1) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(74, 222, 128, 0.1) 1px, transparent 1px);
+  background-size: 40px 40px;
+  animation: scroll-grid 20s linear infinite;
+}
+
+@keyframes scroll-grid {
+  0% { background-position: 0 0; }
+  100% { background-position: -40px -40px; }
+}
+
+.font-pixelify {
+  font-family: 'Pixelify Sans', sans-serif;
+}

@@ -146,6 +146,11 @@ function drawSlimeFrame(
 }
 
 function getCharClass(name: string) {
+  if (name && name.includes('|')) {
+    const parts = name.split('|');
+    const cClass = parts[parts.length - 1];
+    if (CHAR_CLASSES.includes(cClass)) return cClass;
+  }
   let hash = 0;
   for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
   return CHAR_CLASSES[Math.abs(hash) % CHAR_CLASSES.length];
@@ -179,6 +184,10 @@ export default function GameCanvas({ ws, gameState, myId, attacks }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [spell, setSpell] = useState<string>("DELETE");
 
+  const [lockedTarget, setLockedTarget] = useState<number | null>(null);
+  const lockedTargetRef = useRef<number | null>(null);
+  useEffect(() => { lockedTargetRef.current = lockedTarget; }, [lockedTarget]);
+
   const spellRef = useRef(spell);
   useEffect(() => { spellRef.current = spell; }, [spell]);
 
@@ -205,7 +214,12 @@ export default function GameCanvas({ ws, gameState, myId, attacks }: Props) {
       if (e.key >= "1" && e.key <= "5") setSpell(SPELLS[+e.key - 1]);
 
       if (e.key.toLowerCase() === "e" && wsRef.current?.readyState === WebSocket.OPEN) {
-        const tid = nearestEnemy(gsRef.current, idRef.current);
+        let tid = lockedTargetRef.current;
+        if (tid != null) {
+          const tgt = gsRef.current?.enemies?.find((en: any) => en.id === tid);
+          if (!tgt || !tgt.alive) tid = null;
+        }
+        if (tid == null) tid = nearestEnemy(gsRef.current, idRef.current);
         wsRef.current.send(JSON.stringify({ type: "spell", spell: spellRef.current, target_id: tid }));
       }
       if (e.key.toLowerCase() === "r" && wsRef.current?.readyState === WebSocket.OPEN) {
@@ -254,7 +268,13 @@ export default function GameCanvas({ ws, gameState, myId, attacks }: Props) {
       const gs = gsRef.current;
       const currentMyId = idRef.current;
       const currentSpell = spellRef.current;
-      const tid = nearestEnemy(gs, currentMyId);
+      
+      let tid = lockedTargetRef.current;
+      if (tid != null) {
+        const tgt = gs?.enemies?.find((en: any) => en.id === tid);
+        if (!tgt || !tgt.alive) tid = null;
+      }
+      if (tid == null) tid = nearestEnemy(gs, currentMyId);
 
       // Tiled Background
       const roomNum = gs?.room_number || 1;
@@ -497,7 +517,9 @@ export default function GameCanvas({ ws, gameState, myId, attacks }: Props) {
           ctx.fillStyle = "#e2e8f0";
           ctx.font = "bold 12px 'Segoe UI', sans-serif";
           ctx.textAlign = "center";
-          const tag = (p.name || "?").substring(0, 7) + (isMe ? " ★" : "");
+          const rawName = p.name || "?";
+          const displayName = rawName.includes('|') ? rawName.split('|')[0] : rawName;
+          const tag = displayName.substring(0, 7) + (isMe ? " ★" : "");
           ctx.fillText(tag, p.x + TILE / 2, p.y - 3);
 
           // HP bar under player
@@ -512,6 +534,14 @@ export default function GameCanvas({ ws, gameState, myId, attacks }: Props) {
             ctx.fillStyle = "#e2e8f0";
             ctx.font = "bold 10px sans-serif";
             ctx.fillText(`HP ${hp}/${mhp}`, p.x + TILE / 2, p.y + TILE + 16);
+
+            const spCol = SPELL_COLORS[currentSpell] || "#3b82f6";
+            ctx.fillStyle = spCol;
+            rrect(ctx, p.x + TILE / 2 - 25, p.y - 35, 50, 16, 4);
+            ctx.fill();
+            ctx.fillStyle = "#fff";
+            ctx.font = "bold 10px 'Segoe UI', sans-serif";
+            ctx.fillText(currentSpell, p.x + TILE / 2, p.y - 24);
           }
         }
       }
@@ -568,13 +598,35 @@ export default function GameCanvas({ ws, gameState, myId, attacks }: Props) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const cvs = canvasRef.current;
+    if (!cvs) return;
+    const rect = cvs.getBoundingClientRect();
+    const scaleX = cvs.width / rect.width;
+    const scaleY = cvs.height / rect.height;
+    const x = (e.clientX - rect.left) * scaleX;
+    const y = (e.clientY - rect.top) * scaleY;
+
+    const gs = gsRef.current;
+    if (!gs) return;
+    for (const enemy of gs.enemies || []) {
+      if (!enemy.alive) continue;
+      if (x >= enemy.x && x <= enemy.x + TILE && y >= enemy.y && y <= enemy.y + TILE) {
+        setLockedTarget(enemy.id);
+        return;
+      }
+    }
+    setLockedTarget(null);
+  };
+
   return (
     <canvas
       ref={canvasRef}
+      onMouseDown={handleMouseDown}
       width={896}
       height={722}
       tabIndex={0}
-      className="absolute inset-0 w-full h-full outline-none"
+      className="block w-full h-full outline-none"
       style={{ imageRendering: 'pixelated' }}
     />
   );

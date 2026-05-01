@@ -3,6 +3,14 @@ import GameCanvas from "./GameCanvas";
 import "./index.css";
 
 export default function App() {
+  type ViewState = 'TITLE' | 'LOADING' | 'GAME';
+  const [view, setView] = useState<ViewState>('TITLE');
+  const [showSettings, setShowSettings] = useState(false);
+  const [showLobby, setShowLobby] = useState(false);
+  const [showHowToPlay, setShowHowToPlay] = useState(false);
+  const [useCRT, setUseCRT] = useState(false);
+  const [tutorialStep, setTutorialStep] = useState(0);
+  
   const [messages, setMessages] = useState<string[]>([]);
   const [inputVal, setInputVal] = useState("");
   const [sqlInput, setSqlInput] = useState("");
@@ -12,9 +20,13 @@ export default function App() {
   const [gameState, setGameState] = useState<any>(null);
   const [myId, setMyId] = useState<string | null>(null);
   const [attacks, setAttacks] = useState<Record<string, number>>({});
-  const [playerName] = useState(
-    () => "Player_" + Math.floor(Math.random() * 1000)
+  const [playerName, setPlayerName] = useState(
+    () => "Player_" + Math.floor(Math.random() * 100)
   );
+  const [playerClass, setPlayerClass] = useState("Archer");
+  const [gameMode, setGameMode] = useState("Standard");
+  const [speedrunStart, setSpeedrunStart] = useState<number | null>(null);
+  const [elapsedTime, setElapsedTime] = useState(0);
 
   const myIdRef = useRef<string | null>(null);
   useEffect(() => { myIdRef.current = myId; }, [myId]);
@@ -23,6 +35,7 @@ export default function App() {
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
   useEffect(() => {
+    if (view !== 'GAME') return;
     const loc = window.location;
     const protocol = loc.protocol === "https:" ? "wss:" : "ws:";
     const url = `${protocol}//${loc.hostname}:8000/ws`;
@@ -30,7 +43,8 @@ export default function App() {
 
     socket.onopen = () => {
       setWs(socket);
-      socket.send(JSON.stringify({ type: "join", player_name: playerName }));
+      socket.send(JSON.stringify({ type: "join", player_name: `${playerName}|${playerClass}` }));
+      if (gameMode === 'Speedrun') setSpeedrunStart(Date.now());
     };
 
     socket.onmessage = (event) => {
@@ -44,13 +58,13 @@ export default function App() {
           setOnlineCount(msg.players?.length ?? 1);
           break;
         case "player_joined":
-          setMessages((m) => [...m, `⚡ ${msg.player_name} joined!`]);
+          setMessages((m) => [...m, `⚡ ${msg.player_name.split('|')[0]} joined!`]);
           break;
         case "player_left":
           setMessages((m) => [...m, `👋 Player ${(msg.player_id || "?").slice(0, 4)} left.`]);
           break;
         case "chat":
-          setMessages((m) => [...m, `${msg.sender}: ${msg.text}`]);
+          setMessages((m) => [...m, `${msg.sender.split('|')[0]}: ${msg.text}`]);
           break;
         case "reset_ack":
           setMessages((m) => [...m, `⟳ ${msg.message}`]);
@@ -80,11 +94,28 @@ export default function App() {
 
     socket.onclose = () => setWs(null);
     return () => { socket.close(); };
-  }, [playerName]);
+  }, [playerName, playerClass, view, gameMode]);
+
+  useEffect(() => {
+    if (view === 'GAME' && gameMode === 'Speedrun' && speedrunStart) {
+      const iv = setInterval(() => {
+        setElapsedTime(Date.now() - speedrunStart);
+      }, 100);
+      return () => clearInterval(iv);
+    }
+  }, [view, gameMode, speedrunStart]);
+
+  const formatTime = (ms: number) => {
+    const totalSeconds = Math.floor(ms / 1000);
+    const m = Math.floor(totalSeconds / 60);
+    const s = totalSeconds % 60;
+    const msParts = Math.floor((ms % 1000) / 10);
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}.${msParts.toString().padStart(2, '0')}`;
+  };
 
   const sendChat = () => {
     if (!inputVal.trim() || !ws) return;
-    ws.send(JSON.stringify({ type: "chat", text: inputVal, sender: playerName }));
+    ws.send(JSON.stringify({ type: "chat", text: inputVal, sender: `${playerName}|${playerClass}` }));
     setMessages((m) => [...m, `You: ${inputVal}`]);
     setInputVal("");
   };
@@ -93,6 +124,7 @@ export default function App() {
     if (!sqlInput.trim() || !ws) return;
     ws.send(JSON.stringify({ type: "query", sql: sqlInput }));
     setMessages((m) => [...m, `🔍 > ${sqlInput}`]);
+    setSqlInput("");
   };
 
   const roomName = gameState?.room ?? "—";
@@ -113,16 +145,241 @@ export default function App() {
     setQueryResult(null);
   }, [roomNum]);
 
+  useEffect(() => {
+    if (view === 'GAME' && !localStorage.getItem('tutorialDone')) {
+      setTutorialStep(1);
+    }
+  }, [view]);
+
+  if (view === 'TITLE') {
+    return (
+      <div className={`h-full w-full bg-scrolling-grid flex flex-col items-center justify-center font-sans relative overflow-hidden ${useCRT ? 'crt' : ''}`}>
+        
+        <div className="z-10 flex flex-col items-center gap-12">
+          <div className="text-center animate-[bounce_3s_ease-in-out_infinite]">
+            <h1 className="text-7xl md:text-9xl font-pixelify text-[#ffdb7a] tracking-widest drop-shadow-[0_5px_15px_rgba(255,219,122,0.6)]">
+              DATA
+            </h1>
+            <h1 className="text-7xl md:text-9xl font-pixelify text-[#4ade80] tracking-widest drop-shadow-[0_5px_15px_rgba(74,222,128,0.6)] mt-[-15px]">
+              RAIDERS
+            </h1>
+          </div>
+          
+          <div className="flex flex-col gap-4 w-72 items-center">
+            <button 
+              onClick={() => setShowLobby(true)}
+              className="w-full bg-[#d97706] hover:bg-[#b45309] active:bg-[#92400e] text-[#fde6b3] border-b-[6px] border-[#92400e] active:border-b-0 active:translate-y-[6px] font-pixelify tracking-widest px-6 py-4 rounded-xl text-3xl transition-all shadow-lg"
+            >
+              START GAME
+            </button>
+            <button 
+              onClick={() => setShowHowToPlay(true)}
+              className="w-full bg-[#1b5e20] hover:bg-[#14532d] active:bg-[#064e3b] text-[#86efac] border-b-[6px] border-[#064e3b] active:border-b-0 active:translate-y-[6px] font-pixelify tracking-wider px-6 py-3 rounded-xl text-2xl transition-all shadow-lg"
+            >
+              HOW TO PLAY
+            </button>
+            <button 
+              onClick={() => setShowSettings(true)}
+              className="w-full bg-[#5c3e21] hover:bg-[#784f2b] active:bg-[#3e240f] text-[#d4b483] border-b-[6px] border-[#3e240f] active:border-b-0 active:translate-y-[6px] font-pixelify tracking-wider px-6 py-3 rounded-xl text-2xl transition-all shadow-lg"
+            >
+              SETTINGS
+            </button>
+          </div>
+        </div>
+
+        {showHowToPlay && (
+          <div className="absolute inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+            <div className="bg-[#784f2b] border-[4px] border-[#523315] rounded-2xl p-6 w-full max-w-2xl max-h-[90vh] shadow-2xl flex flex-col gap-5 overflow-hidden">
+              <h2 className="text-3xl font-pixelify text-[#ffdb7a] tracking-wider text-center drop-shadow-md shrink-0">HOW TO PLAY</h2>
+              
+              <div className="bg-[#5c3e21] p-4 rounded-xl border-2 border-[#3e240f] overflow-y-auto custom-scrollbar text-sm text-[#fde6b3] flex flex-col gap-4 font-semibold">
+                
+                <section>
+                  <h3 className="text-[#4ade80] font-black text-lg mb-1 drop-shadow-sm font-pixelify tracking-wide">🎮 THE GOAL</h3>
+                  <p>You are a Data Raider. Your mission is to clear the dungeon room by eliminating target enemies. Each enemy is a <span className="text-[#facc15] font-bold">row of data</span> in the target database table.</p>
+                </section>
+
+                <section>
+                  <h3 className="text-[#4ade80] font-black text-lg mb-1 drop-shadow-sm font-pixelify tracking-wide">⚔️ COMBAT & SQL</h3>
+                  <ul className="list-disc pl-5 space-y-1">
+                    <li>Use the <span className="text-[#ffdb7a] font-bold bg-[#3e240f] px-1 rounded">TERMINAL</span> on the right to interact with the database.</li>
+                    <li>Type SQL commands (e.g., <code className="text-[#38bdf8] bg-[#1e1208] px-1 rounded">SELECT * FROM table</code>).</li>
+                    <li>When you alter data in the terminal, the enemies in the room will react accordingly!</li>
+                  </ul>
+                </section>
+
+                <section className="bg-[#2e1d0d] p-3 rounded-lg border border-[#3e240f]">
+                  <h3 className="text-[#facc15] font-black text-lg mb-2 drop-shadow-sm font-pixelify tracking-wide">🧙‍♂️ SQL FOR BEGINNERS</h3>
+                  <p className="mb-2 text-xs italic text-[#d4b483]">Never coded before? No problem! SQL is just a way to "talk" to the data. Here are the 3 spells you need to know:</p>
+                  
+                  <div className="space-y-3 mt-3">
+                    <div>
+                      <div className="text-[#38bdf8] font-bold font-mono text-xs bg-[#1e1208] px-2 py-1 rounded inline-block mb-1">SELECT * FROM enemies</div>
+                      <p className="text-xs"><strong>The "Scout" Spell:</strong> Use this to look at all the data in the table. It helps you see what enemies exist and what their stats are.</p>
+                    </div>
+                    
+                    <div>
+                      <div className="text-[#fca5a5] font-bold font-mono text-xs bg-[#1e1208] px-2 py-1 rounded inline-block mb-1">DELETE FROM enemies WHERE name='Slime'</div>
+                      <p className="text-xs"><strong>The "Destroy" Spell:</strong> Use this to permanently delete rows. <span className="text-[#ef4444] font-bold">WHERE</span> is crucial—it targets specific enemies. If you forget it, you might delete everything!</p>
+                    </div>
+
+                    <div>
+                      <div className="text-[#86efac] font-bold font-mono text-xs bg-[#1e1208] px-2 py-1 rounded inline-block mb-1">UPDATE enemies SET hp=0 WHERE id=3</div>
+                      <p className="text-xs"><strong>The "Alter" Spell:</strong> Use this to change existing data. You can set an enemy's HP to 0 to instantly defeat them!</p>
+                    </div>
+                  </div>
+                </section>
+
+                <section>
+                  <h3 className="text-[#4ade80] font-black text-lg mb-1 drop-shadow-sm font-pixelify tracking-wide">🎯 CONTROLS</h3>
+                  <ul className="list-disc pl-5 space-y-1">
+                    <li><span className="text-[#ffdb7a] font-bold">W, A, S, D</span> - Move your character.</li>
+                    <li><span className="text-[#ffdb7a] font-bold">Mouse Click</span> - Target an enemy to inspect their data.</li>
+                    <li><span className="text-[#ffdb7a] font-bold">1, 2, 3, 4, 5</span> - Select your active spell (changes the type of data manipulation).</li>
+                    <li><span className="text-[#ffdb7a] font-bold">E</span> - Cast your selected spell at your locked target!</li>
+                    <li><span className="text-[#ffdb7a] font-bold">R</span> - Reset the room if you make a mistake and corrupt the database.</li>
+                  </ul>
+                </section>
+
+                <section>
+                  <h3 className="text-[#4ade80] font-black text-lg mb-1 drop-shadow-sm font-pixelify tracking-wide">💡 TIPS</h3>
+                  <p>Pay close attention to the <span className="text-[#facc15] font-bold">MISSION OBJECTIVE</span> and <span className="text-[#facc15] font-bold">TABLE SCHEMA</span> on the left panel. They tell you exactly what data needs to be altered to unlock the portal.</p>
+                </section>
+
+              </div>
+
+              <button 
+                onClick={() => setShowHowToPlay(false)}
+                className="bg-[#d97706] hover:bg-[#b45309] active:bg-[#92400e] text-[#fde6b3] border-b-[4px] border-[#92400e] active:border-b-0 active:translate-y-[4px] font-bold px-4 py-3 rounded-lg mt-2 transition-all tracking-wider text-sm shrink-0"
+              >
+                GOT IT!
+              </button>
+            </div>
+          </div>
+        )}
+
+        {showLobby && (
+          <div className="absolute inset-0 bg-black/80 flex items-center justify-center z-50">
+            <div className="bg-[#784f2b] border-[4px] border-[#523315] rounded-2xl p-6 w-80 shadow-2xl flex flex-col gap-5 transform transition-all scale-100">
+              <h2 className="text-3xl font-pixelify text-[#ffdb7a] tracking-wider text-center drop-shadow-md">LOBBY SETUP</h2>
+              <div className="bg-[#5c3e21] p-4 rounded-xl border-2 border-[#3e240f] flex flex-col gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-[#fde6b3] mb-1 tracking-wider">PLAYER NAME</label>
+                  <input 
+                    type="text" 
+                    value={playerName} 
+                    onChange={(e) => setPlayerName(e.target.value)}
+                    maxLength={12}
+                    className="w-full bg-[#2e1d0d] border-[3px] border-[#1e1208] rounded px-3 py-2 text-sm font-mono text-[#4ade80] focus:outline-none focus:border-[#d97706] shadow-inner"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-[#fde6b3] mb-1 tracking-wider">GAME MODE</label>
+                  <select 
+                    value={gameMode}
+                    onChange={(e) => setGameMode(e.target.value)}
+                    className="w-full bg-[#2e1d0d] border-[3px] border-[#1e1208] rounded px-3 py-2 text-sm font-bold text-[#facc15] focus:outline-none focus:border-[#d97706] shadow-inner cursor-pointer"
+                  >
+                    <option value="Standard">Multiplayer Dungeon</option>
+                    <option value="Speedrun">Speedrun Mode</option>
+                    <option value="SinglePlayer" disabled>Single Player Sandbox (Soon)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-[#fde6b3] mb-1 tracking-wider">CHARACTER CLASS</label>
+                  <select 
+                    value={playerClass}
+                    onChange={(e) => setPlayerClass(e.target.value)}
+                    className="w-full bg-[#2e1d0d] border-[3px] border-[#1e1208] rounded px-3 py-2 text-sm font-bold text-[#facc15] focus:outline-none focus:border-[#d97706] shadow-inner cursor-pointer"
+                  >
+                    <option value="Archer">Archer</option>
+                    <option value="Swordsman">Swordsman</option>
+                    <option value="Wizard">Wizard</option>
+                  </select>
+                </div>
+              </div>
+              <div className="flex gap-3 mt-2">
+                <button 
+                  onClick={() => setShowLobby(false)}
+                  className="flex-1 bg-[#5c3e21] hover:bg-[#3e240f] text-[#d4b483] border-b-[4px] border-[#3e240f] active:border-b-0 active:translate-y-[4px] font-bold py-3 rounded-lg transition-all text-sm"
+                >
+                  CANCEL
+                </button>
+                <button 
+                  onClick={() => { setShowLobby(false); setView('LOADING'); }}
+                  className="flex-1 bg-[#4ade80] hover:bg-[#22c55e] active:bg-[#16a34a] text-[#064e3b] border-b-[4px] border-[#16a34a] active:border-b-0 active:translate-y-[4px] font-bold py-3 rounded-lg transition-all text-sm shadow-[0_0_10px_rgba(74,222,128,0.5)]"
+                >
+                  JOIN SERVER
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showSettings && (
+          <div className="absolute inset-0 bg-black/80 flex items-center justify-center z-50">
+            <div className="bg-[#784f2b] border-[4px] border-[#523315] rounded-2xl p-6 w-80 shadow-2xl flex flex-col gap-5 transform transition-all scale-100">
+              <h2 className="text-3xl font-pixelify text-[#ffdb7a] tracking-wider text-center drop-shadow-md">SETTINGS</h2>
+              <div className="bg-[#5c3e21] p-4 rounded-xl border-2 border-[#3e240f] flex flex-col gap-4">
+                
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-bold text-[#fde6b3] tracking-wider">CRT FILTER</label>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" className="sr-only peer" checked={useCRT} onChange={() => setUseCRT(!useCRT)} />
+                    <div className="w-11 h-6 bg-[#2e1d0d] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-[#fde6b3] after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#4ade80]"></div>
+                  </label>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-[#fde6b3] mb-1 tracking-wider">MASTER VOLUME</label>
+                  <input type="range" min="0" max="100" defaultValue="50" className="w-full accent-[#d97706] cursor-pointer" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-[#fde6b3] mb-1 tracking-wider">SFX VOLUME</label>
+                  <input type="range" min="0" max="100" defaultValue="80" className="w-full accent-[#d97706] cursor-pointer" />
+                </div>
+
+              </div>
+              <button 
+                onClick={() => setShowSettings(false)}
+                className="bg-[#d97706] hover:bg-[#b45309] active:bg-[#92400e] text-[#fde6b3] border-b-[4px] border-[#92400e] active:border-b-0 active:translate-y-[4px] font-bold px-4 py-3 rounded-lg mt-2 transition-all tracking-wider text-sm"
+              >
+                SAVE & CLOSE
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (view === 'LOADING') {
+    setTimeout(() => setView('GAME'), 1500);
+    return (
+      <div className={`h-full w-full bg-[#1b3d1b] flex flex-col items-center justify-center font-sans ${useCRT ? 'crt' : ''}`}>
+        <div className="w-16 h-16 border-[6px] border-[#523315] border-t-[#4ade80] rounded-full animate-spin mb-6 shadow-lg"></div>
+        <p className="text-[#4ade80] font-mono font-bold text-lg animate-pulse tracking-widest drop-shadow-md">CONNECTING TO DATABASE...</p>
+      </div>
+    );
+  }
+
+  // view === 'GAME'
   return (
-    <div className="h-full w-full bg-[#1b3d1b] p-3 md:p-5 text-[#fde6b3] font-sans flex flex-col md:flex-row gap-5">
-
-      {/* ── LEFT COLUMN (Wooden Board styling) ────────────────── */}
-      <div className="flex flex-col w-full md:w-[380px] gap-3 shrink-0 h-full pb-1 overflow-hidden">
-
-        {/* Room Header */}
-        <div className="bg-[#5c3e21] border-[6px] border-[#3e240f] rounded-2xl p-3 shadow-[inset_0_0_10px_rgba(0,0,0,0.5),0_6px_12px_rgba(0,0,0,0.5)]">
+    <div className={`h-full w-full bg-[#1b3d1b] overflow-x-auto overflow-y-hidden custom-scrollbar ${useCRT ? 'crt relative' : ''}`}>
+      <div className="min-w-[1100px] h-full p-3 md:p-5 text-[#fde6b3] font-sans flex flex-row gap-5 relative z-10">
+        
+        {/* ── LEFT COLUMN (Data & Context) ────────────────── */}
+        <div className="flex flex-col w-[280px] lg:w-[320px] gap-3 shrink-0 h-full overflow-y-auto custom-scrollbar pr-1 pb-2">
+          
+          {/* Room Header */}
+          <div className="bg-[#5c3e21] border-[6px] border-[#3e240f] rounded-2xl p-3 shadow-[inset_0_0_10px_rgba(0,0,0,0.5),0_6px_12px_rgba(0,0,0,0.5)] shrink-0">
           <div className="flex items-center gap-2 mb-1">
             <span className="text-xs font-bold bg-[#3e240f]/60 px-2.5 py-0.5 rounded border border-[#3e240f]">ROOM {roomNum}/5</span>
+            {gameMode === 'Speedrun' && (
+              <span className="text-xs font-mono font-bold bg-[#ef4444]/20 text-[#fca5a5] px-2 py-0.5 rounded border border-[#ef4444]/30 shadow-inner">
+                ⏱ {formatTime(elapsedTime)}
+              </span>
+            )}
             <div className="flex items-center gap-1.5 ml-auto">
               <div className="w-2 h-2 rounded-full bg-[#4ade80] shadow-[0_0_8px_rgba(74,222,128,0.8)] animate-pulse"></div>
               <span className="text-xs font-semibold text-[#fde6b3]">{onlineCount} online</span>
@@ -147,7 +404,7 @@ export default function App() {
         </div>
 
         {/* Mission Objective */}
-        <div className="bg-[#784f2b] border-[4px] border-[#523315] rounded-xl p-3 shadow-inner">
+        <div className="bg-[#784f2b] border-[4px] border-[#523315] rounded-xl p-3 shadow-inner shrink-0">
           <h2 className="text-sm font-black text-[#ffdb7a] tracking-wider mb-2 flex items-center gap-1.5 drop-shadow-sm">
             <span>📜</span> MISSION OBJECTIVE
           </h2>
@@ -181,11 +438,11 @@ export default function App() {
           const columns = showQuery ? queryResult.columns : schemaInfo.columns;
           const rows = showQuery ? queryResult.rows : (schemaInfo.sample_data || []);
           return (
-            <div className="bg-[#784f2b] border-[4px] border-[#523315] rounded-xl p-3 flex flex-col shrink shadow-inner overflow-hidden max-h-[220px]">
+            <div className="bg-[#784f2b] border-[4px] border-[#523315] rounded-xl p-3 flex flex-col shadow-inner overflow-hidden flex-1 min-h-[200px]">
               <h2 className="text-sm font-black text-[#ffdb7a] tracking-wider mb-2 flex items-center gap-1.5 drop-shadow-sm shrink-0">
                 <span>🗃️</span> {showQuery ? "QUERY RESULT" : "TABLE SCHEMA"}
               </h2>
-              <div className="bg-[#523315] rounded border-[2px] border-[#3e240f] shadow-inner flex flex-col overflow-hidden">
+              <div className="bg-[#523315] rounded border-[2px] border-[#3e240f] shadow-inner flex flex-col overflow-hidden h-full">
                 <div className="bg-[#3e240f] border-b-[2px] border-[#2e1d0d] px-3 py-1.5 shrink-0 flex justify-between items-center">
                   <span className="text-xs font-mono font-bold text-[#fde6b3] drop-shadow-sm">
                     {schemaInfo.table_name}
@@ -194,10 +451,10 @@ export default function App() {
                     <span className="text-[10px] font-bold text-[#facc15]">{rows.length} rows</span>
                   )}
                 </div>
-                <div className="overflow-auto bg-[#8c5f36]/10 flex-1 relative custom-scrollbar">
+                <div className="overflow-auto bg-[#8c5f36]/10 flex-1 custom-scrollbar">
                   <table className="w-full text-xs">
                     <thead>
-                      <tr className="border-b-[2px] border-[#3e240f] sticky top-0 bg-[#523315]">
+                      <tr className="border-b-[2px] border-[#3e240f] sticky top-0 bg-[#523315] z-10">
                         {columns.map((col: string) => (
                           <th key={col} className="px-2 py-1.5 text-left font-bold text-[#facc15] whitespace-nowrap">{col}</th>
                         ))}
@@ -224,8 +481,18 @@ export default function App() {
           );
         })()}
 
+      </div>
+
+      {/* ── CENTER COLUMN (Canvas) ─────────────────────── */}
+      <div className="flex flex-col w-full flex-1 h-full min-w-0 border-[6px] border-[#3e240f] rounded-2xl overflow-hidden shadow-[0_0_15px_rgba(0,0,0,0.5)] relative">
+        <GameCanvas ws={ws} gameState={gameState} myId={myId} attacks={attacks} />
+      </div>
+
+      {/* ── RIGHT COLUMN (Interaction) ─────────────────── */}
+      <div className="flex flex-col w-[280px] lg:w-[320px] gap-3 shrink-0 h-full overflow-y-auto custom-scrollbar pl-1 pb-2">
+        
         {/* SQL Terminal */}
-        <div className="bg-[#5c3e21] border-[6px] border-[#3e240f] rounded-2xl p-3 flex flex-col shrink shadow-[inset_0_0_10px_rgba(0,0,0,0.5),0_6px_12px_rgba(0,0,0,0.5)]">
+        <div className="bg-[#5c3e21] border-[6px] border-[#3e240f] rounded-2xl p-3 flex flex-col shrink-0 shadow-[inset_0_0_10px_rgba(0,0,0,0.5),0_6px_12px_rgba(0,0,0,0.5)]">
           <h2 className="text-sm font-black text-[#4ade80] tracking-wider mb-2 flex items-center gap-1.5 drop-shadow-sm">
             <span></span> TERMINAL
           </h2>
@@ -236,24 +503,23 @@ export default function App() {
               value={sqlInput}
               onChange={(e) => setSqlInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && sendQuery()}
-              placeholder={`SELECT * FROM ${schemaInfo.table_name || roomName} ...`}
+              placeholder={`SELECT * FROM ...`}
               className="flex-1 bg-[#2e1d0d] border-[3px] border-[#1e1208] rounded px-3 py-2 text-sm font-mono text-[#4ade80] placeholder-[#784f2b] focus:outline-none focus:border-[#4ade80] transition-colors shadow-inner"
             />
             <button
               onClick={sendQuery}
-              className="bg-[#d97706] hover:bg-[#b45309] active:bg-[#92400e] text-[#fde6b3] border-b-[4px] border-[#92400e] active:border-b-0 active:translate-y-[4px] font-black tracking-wider px-4 py-2 rounded-lg text-sm transition-all focus:outline-none"
+              className="bg-[#d97706] hover:bg-[#b45309] active:bg-[#92400e] text-[#fde6b3] border-b-[4px] border-[#92400e] active:border-b-0 active:translate-y-[4px] font-black tracking-wider px-3 py-2 rounded-lg text-sm transition-all focus:outline-none"
             >
               RUN
             </button>
           </div>
-          {/* The query result table is now merged into the Schema Card above */}
           {queryResult && !queryResult.success && (
             <p className="text-xs text-red-400 font-mono mt-1">Error: {queryResult.message}</p>
           )}
         </div>
 
-        {/* Chat */}
-        <div className="bg-[#784f2b] border-[4px] border-[#523315] rounded-xl flex flex-col p-3 flex-1 min-h-[120px] shadow-inner">
+        {/* Chat / Logs */}
+        <div className="bg-[#784f2b] border-[4px] border-[#523315] rounded-xl flex flex-col p-3 flex-1 min-h-[250px] shadow-inner">
           <div className="flex justify-between items-center mb-2">
             <h2 className="text-sm font-black text-[#ffdb7a] tracking-wider flex items-center drop-shadow-sm">
               LOGS
@@ -270,11 +536,15 @@ export default function App() {
               <p className="text-[#fde6b3]/50 text-[10px] text-center mt-6">No messages yet...</p>
             )}
             {messages.map((m, i) => (
-              <div key={i} className={`px-2.5 py-1.5 rounded-lg max-w-full break-words text-[11px] font-bold ${m.startsWith("✅") ? "bg-[#4ade80]/20 text-[#4ade80] border border-[#4ade80]/30" :
+              <div key={i} className={`px-2.5 py-1.5 rounded-lg max-w-full break-words text-[11px] font-bold ${
+                  m.startsWith("✅") ? "bg-[#4ade80]/20 text-[#4ade80] border border-[#4ade80]/30" :
                   m.startsWith("❌") ? "bg-[#ef4444]/20 text-[#fca5a5] border border-[#ef4444]/30" :
-                    m.startsWith("🔍") ? "bg-[#38bdf8]/20 text-[#bae6fd] border border-[#38bdf8]/30 font-mono" :
-                      m.startsWith("📊") ? "bg-[#c084fc]/20 text-[#e9d5ff] border border-[#c084fc]/30" :
-                        "bg-[#523315] text-[#fde6b3] shadow-inner"
+                  m.startsWith("🔍") ? "bg-[#38bdf8]/20 text-[#bae6fd] border border-[#38bdf8]/30 font-mono" :
+                  m.startsWith("📊") ? "bg-[#c084fc]/20 text-[#e9d5ff] border border-[#c084fc]/30" :
+                  (m.startsWith("⚡") || m.startsWith("👋")) ? "bg-[#facc15]/20 text-[#fde047] border border-[#facc15]/30" :
+                  m.startsWith("⚔") ? "bg-[#f87171]/20 text-[#fca5a5] border border-[#f87171]/30" :
+                  m.startsWith("⟳") ? "bg-[#fb923c]/20 text-[#fdba74] border border-[#fb923c]/30" :
+                  "bg-[#523315] text-[#fde6b3] shadow-inner"
                 }`}>
                 {m.replace(/^[✅❌🔍📊⚡👋⚔⟳]\s*/, "")}
               </div>
@@ -292,7 +562,7 @@ export default function App() {
             />
             <button
               onClick={sendChat}
-              className="bg-[#d97706] hover:bg-[#b45309] active:bg-[#92400e] text-[#fde6b3] font-bold px-4 py-1.5 rounded text-xs transition-colors cursor-pointer"
+              className="bg-[#d97706] hover:bg-[#b45309] active:bg-[#92400e] text-[#fde6b3] font-bold px-3 py-1.5 rounded text-xs transition-colors cursor-pointer"
             >
               Send
             </button>
@@ -300,7 +570,7 @@ export default function App() {
         </div>
 
         {/* Controls */}
-        <div className="bg-[#5c3e21] border-[4px] border-[#3e240f] rounded-xl p-2 shadow-inner">
+        <div className="bg-[#5c3e21] border-[4px] border-[#3e240f] rounded-xl p-2 shadow-inner shrink-0 mt-auto">
           <h2 className="text-[10px] font-black text-[#d4b483] tracking-wider mb-2">CONTROLS</h2>
           <div className="flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-[#fde6b3] font-semibold">
             <span><b className="text-[#ffdb7a]">WASD</b> move</span>
@@ -309,14 +579,61 @@ export default function App() {
             <span><b className="text-[#ffdb7a]">R</b> reset</span>
           </div>
         </div>
+
       </div>
 
-      {/* ── RIGHT COLUMN: Canvas ─────────────────────────────── */}
-      <div className="flex flex-col w-full flex-1 h-full min-w-0">
-        <div className="w-full flex-1 relative overflow-hidden min-h-[400px]">
-          <GameCanvas ws={ws} gameState={gameState} myId={myId} attacks={attacks} />
+      {/* ── TUTORIAL OVERLAY ──────────────────────────── */}
+      {tutorialStep > 0 && (
+        <div className="absolute inset-0 z-50 flex flex-col pointer-events-auto">
+          
+          {/* Mirror Layout for Highlights */}
+          <div className="absolute inset-0 p-3 md:p-5 overflow-x-auto overflow-y-hidden custom-scrollbar pointer-events-none">
+            <div className="min-w-[1100px] h-full flex flex-row gap-5">
+              <div className={`w-[280px] lg:w-[320px] shrink-0 h-full rounded-2xl transition-all duration-500 ${tutorialStep === 3 ? 'shadow-[0_0_0_9999px_rgba(0,0,0,0.8),inset_0_0_20px_#facc15] border-[4px] border-[#facc15] bg-[#facc15]/10' : ''}`}></div>
+              <div className={`flex-1 h-full rounded-2xl transition-all duration-500 ${tutorialStep === 2 ? 'shadow-[0_0_0_9999px_rgba(0,0,0,0.8),inset_0_0_20px_#facc15] border-[4px] border-[#facc15] bg-[#facc15]/10' : ''}`}></div>
+              <div className={`w-[280px] lg:w-[320px] shrink-0 h-full rounded-2xl transition-all duration-500 ${(tutorialStep === 4 || tutorialStep === 5) ? 'shadow-[0_0_0_9999px_rgba(0,0,0,0.8),inset_0_0_20px_#facc15] border-[4px] border-[#facc15] bg-[#facc15]/10' : ''}`}></div>
+            </div>
+          </div>
+          
+          {/* Fallback Dark Overlay for Steps 1 & 6 */}
+          {(tutorialStep === 1 || tutorialStep === 6) && (
+            <div className="absolute inset-0 bg-black/80 pointer-events-none"></div>
+          )}
+
+          {/* Dialogue Box */}
+          <div className="relative z-10 w-[90%] max-w-4xl mx-auto mt-auto mb-10 bg-[#5c3e21] border-[6px] border-[#3e240f] rounded-2xl p-6 shadow-[0_10px_50px_rgba(0,0,0,1)] flex flex-col md:flex-row items-center md:items-end gap-6 animate-[bounce_0.3s_ease-out]">
+            <div className="w-24 h-24 bg-[#3e240f] border-4 border-[#2e1d0d] rounded-xl overflow-hidden shrink-0 hidden md:block">
+               <div className="w-full h-full bg-[#facc15] flex items-center justify-center text-5xl pb-2">🤖</div>
+            </div>
+            <div className="flex-1 flex flex-col justify-between h-full py-1 text-center md:text-left">
+              <h3 className="text-2xl font-pixelify text-[#4ade80] tracking-wider mb-2 drop-shadow-md">GUIDE</h3>
+              <p className="text-[#fde6b3] font-bold text-lg md:text-xl leading-relaxed">
+                {tutorialStep === 1 && "Welcome to Data Raiders! I'm here to get you up to speed. Ready?"}
+                {tutorialStep === 2 && "This is the Game Canvas. Use [W][A][S][D] to move around. If you want to inspect an enemy's data, just click on them with your mouse to lock on!"}
+                {tutorialStep === 3 && "This Left Panel is your Intel Screen! The MISSION OBJECTIVE tells you exactly which enemies you need to eliminate to unlock the portal. The TABLE SCHEMA reveals the exact column names of the database you'll need for your spells!"}
+                {tutorialStep === 4 && "The Right Panel is your weapon—the SQL Terminal! Every enemy here is a row in a real database. To defeat them, you must type SQL commands like 'DELETE FROM table' or 'UPDATE table SET hp=0' and press [Enter]."}
+                {tutorialStep === 5 && "Want a shortcut? You can press keys [1] through [5] to select a quick spell, lock onto an enemy, and press [E] to cast it directly without typing! Check the Logs below the terminal to see the results."}
+                {tutorialStep === 6 && "You are ready! Use your intel, type your spells, and clear the database room. Good luck!"}
+              </p>
+            </div>
+            <button 
+              onClick={() => {
+                if (tutorialStep === 6) {
+                  setTutorialStep(0);
+                  localStorage.setItem('tutorialDone', 'true');
+                } else {
+                  setTutorialStep(s => s + 1);
+                }
+              }}
+              className="bg-[#d97706] hover:bg-[#b45309] active:bg-[#92400e] text-[#fde6b3] border-b-[6px] border-[#92400e] active:border-b-0 active:translate-y-[6px] font-pixelify tracking-widest px-8 py-4 rounded-xl text-2xl transition-all shrink-0 shadow-lg mt-4 md:mt-0"
+            >
+              {tutorialStep === 6 ? "START" : "NEXT ➔"}
+            </button>
+          </div>
         </div>
-      </div>
+      )}
+
+    </div>
     </div>
   );
 }
