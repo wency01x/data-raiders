@@ -383,7 +383,6 @@ export default function GameCanvas({ ws, gameState, myId, attacks, onRequestQuit
         for (const e of gs.enemies || []) {
           if (!e.alive) continue;
           const blocked = e.depends_on?.length > 0;
-          const isTarget: boolean = e.is_target ?? true;
 
           // Pick sprite based on civilian vs target
           const atkTime = atkRef.current["enemy_" + e.id] || 0;
@@ -440,7 +439,11 @@ export default function GameCanvas({ ws, gameState, myId, attacks, onRequestQuit
 
           // Target highlight ring
           if (e.id === tid) {
-            rrect(ctx, ex - 3, ey - 3, ew + 6, ew + 6, 9);
+            const hx = e.x + 10;
+            const hy = e.y + 4;
+            const hw = TILE - 20;
+            const hh = TILE - 20;
+            rrect(ctx, hx, hy, hw, hh, 8);
             ctx.lineWidth = 3; ctx.strokeStyle = "#3b82f6"; ctx.stroke();
             const pulse = 0.3 + Math.sin(Date.now() / 200) * 0.2;
             ctx.shadowColor = "#3b82f6";
