@@ -1,12 +1,29 @@
 import asyncio
+import functools
 from server.db import get_connection
 from server.game_state import state
 
 _db_lock = asyncio.Lock()
 
-# ── Room-specific objective checkers ─────────────────────────────────────
-# Each returns (is_valid_target: bool, reason: str)
-# is_valid_target = True means this enemy SHOULD be affected by the spell
+
+# ── Thread-pool helper ────────────────────────────────────────────────────────
+# SQLite operations are synchronous (blocking I/O).  Running them on the main
+# asyncio event loop would stall ALL WebSocket message handling while the DB
+# responds.  asyncio.run_in_executor() offloads each DB call to a background
+# thread from Python's default ThreadPoolExecutor, so the event loop stays free
+# to process movement / spell / chat messages from other players concurrently.
+
+async def _run_in_thread(func, *args):
+    """
+    Run a blocking synchronous function in the default thread pool.
+    Demonstrates multithreading: DB I/O runs on a worker thread while
+    the asyncio event loop continues handling other coroutines.
+    """
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(None, functools.partial(func, *args))
+
+
+# ── Room-specific objective checkers ─────────────────────────────────────────
 
 def _check_room1(enemy_extra: dict, spell: str) -> tuple[bool, str]:
     """Room 1: DELETE only rows WHERE status = 'CORRUPTED'"""
@@ -62,7 +79,6 @@ ROOM_CHECKERS = {
 async def cast_spell(player_id: str, spell: str, target_id: int | None) -> dict:
     spell = spell.upper()
 
-    # Check if spell is allowed in this room
     if spell not in state.allowed_spells and spell != "SELECT":
         return {"success": False, "message": f"Spell {spell} not available in this room! Allowed: {', '.join(state.allowed_spells)}"}
 
@@ -83,49 +99,59 @@ async def _spell_select(player_id: str, target_id: int | None) -> dict:
     if target_id is None:
         return {"success": False, "message": "SELECT needs a target. Walk near an enemy and press E."}
 
-    conn = get_connection()
-    try:
-        room = state.current_room
-        row  = conn.execute(
-            f"SELECT * FROM {room} WHERE id = ? AND alive = 1", (target_id,)
-        ).fetchone()
-        if not row:
-            return {"success": False, "message": "No target found."}
+    # ── DB read runs in a thread pool — non-blocking for other players ────
+    def _do_select():
+        conn = get_connection()
+        try:
+            room = state.current_room
+            row = conn.execute(
+                f"SELECT * FROM {room} WHERE id = ? AND alive = 1", (target_id,)
+            ).fetchone()
+            return row, list(row.keys()) if row else []
+        finally:
+            conn.close()
 
-        # Build a full row display
-        cols = row.keys()
-        parts = [f"{c}={row[c]}" for c in cols if c not in ("tile_x", "tile_y", "alive", "depends_on")]
-        info = " | ".join(parts)
+    print(f"[ThreadPool] SELECT query for target {target_id} dispatched to worker thread.")
+    row, cols = await _run_in_thread(_do_select)
 
-        # Room 5 boss: advance phase on SELECT
-        if state.room_number == 5:
-            async with state.lock:
-                enemy = state.enemies.get(target_id)
-                if enemy and enemy.extra.get("phase") == 1:
-                    checker = ROOM_CHECKERS.get(5)
-                    valid, reason = checker(enemy.extra, "SELECT")
-                    if valid:
-                        enemy.extra["phase"] = 2
-                        conn.execute(f"UPDATE {room} SET phase=2 WHERE id=?", (target_id,))
-                        conn.commit()
-                        return {"success": True, "message": f"SELECT reveals: {info}\n⚡ Weakness found: REINDEX! Use UPDATE next!", "affected_id": target_id}
+    if not row:
+        return {"success": False, "message": "No target found."}
 
-        await state.add_score(player_id, 5)
-        return {"success": True, "message": f"SELECT → {info}", "affected_id": target_id}
-    finally:
-        conn.close()
+    parts = [f"{c}={row[c]}" for c in cols if c not in ("tile_x", "tile_y", "alive", "depends_on")]
+    info = " | ".join(parts)
+
+    # Room 5 boss: advance phase on SELECT
+    if state.room_number == 5:
+        async with state.lock:
+            enemy = state.enemies.get(target_id)
+            if enemy and enemy.extra.get("phase") == 1:
+                checker = ROOM_CHECKERS.get(5)
+                valid, reason = checker(enemy.extra, "SELECT")
+                if valid:
+                    enemy.extra["phase"] = 2
+
+                    def _advance_phase():
+                        conn = get_connection()
+                        try:
+                            conn.execute(f"UPDATE {state.current_room} SET phase=2 WHERE id=?", (target_id,))
+                            conn.commit()
+                        finally:
+                            conn.close()
+
+                    await _run_in_thread(_advance_phase)
+                    return {"success": True, "message": f"SELECT reveals: {info}\n⚡ Weakness found: REINDEX! Use UPDATE next!", "affected_id": target_id}
+
+    await state.add_score(player_id, 5)
+    return {"success": True, "message": f"SELECT → {info}", "affected_id": target_id}
 
 
 async def _spell_delete(player_id: str, target_id: int | None) -> dict:
     if target_id is None:
         return {"success": False, "message": "DELETE needs a target."}
 
-    # ── FK constraint check (room 4 primarily) ───────────────────────────
+    # ── FK constraint check ───────────────────────────────────────────────
     async with state.lock:
-        blockers = [
-            e for e in state.enemies.values()
-            if e.alive and target_id in e.depends_on
-        ]
+        blockers = [e for e in state.enemies.values() if e.alive and target_id in e.depends_on]
         if blockers:
             names = ", ".join(e.label for e in blockers)
             p = state.players.get(player_id)
@@ -140,12 +166,11 @@ async def _spell_delete(player_id: str, target_id: int | None) -> dict:
                 ),
             }
 
-    # ── Room objective check ─────────────────────────────────────────────
+    # ── Room objective check ──────────────────────────────────────────────
     async with state.lock:
         enemy = state.enemies.get(target_id)
         if not enemy or not enemy.alive:
             return {"success": False, "message": "Target not found or already deleted."}
-
         checker = ROOM_CHECKERS.get(state.room_number)
         if checker:
             valid, reason = checker(enemy.extra, "DELETE")
@@ -155,35 +180,46 @@ async def _spell_delete(player_id: str, target_id: int | None) -> dict:
                     p.hp = max(0, p.hp - 1)
                 return {"success": False, "message": reason}
 
-    # ── Apply damage ─────────────────────────────────────────────────────
+    # ── DB write in thread pool ───────────────────────────────────────────
     async with _db_lock:
-        conn = get_connection()
-        try:
-            room = state.current_room
-            row  = conn.execute(
-                f"SELECT * FROM {room} WHERE id = ? AND alive = 1", (target_id,)
-            ).fetchone()
-            if not row:
-                return {"success": False, "message": "Target not found or already deleted."}
-            new_hp = row["hp"] - 2
-            if new_hp <= 0:
-                conn.execute(f"UPDATE {room} SET hp=0, alive=0 WHERE id=?", (target_id,))
+        room = state.current_room
+
+        def _do_delete():
+            conn = get_connection()
+            try:
+                row = conn.execute(
+                    f"SELECT * FROM {room} WHERE id = ? AND alive = 1", (target_id,)
+                ).fetchone()
+                if not row:
+                    return None, None
+                new_hp = row["hp"] - 2
+                if new_hp <= 0:
+                    conn.execute(f"UPDATE {room} SET hp=0, alive=0 WHERE id=?", (target_id,))
+                else:
+                    conn.execute(f"UPDATE {room} SET hp=? WHERE id=?", (new_hp, target_id))
                 conn.commit()
-                async with state.lock:
-                    if target_id in state.enemies:
-                        state.enemies[target_id].alive = False
-                await state.add_score(player_id, 25)
-                return {"success": True, "message": f"DELETE destroyed [{row['label']}]! +25 pts", "affected_id": target_id}
-            else:
-                conn.execute(f"UPDATE {room} SET hp=? WHERE id=?", (new_hp, target_id))
-                conn.commit()
-                async with state.lock:
-                    if target_id in state.enemies:
-                        state.enemies[target_id].hp = new_hp
-                await state.add_score(player_id, 10)
-                return {"success": True, "message": f"DELETE hit [{row['label']}] — {new_hp} HP left. +10 pts", "affected_id": target_id}
-        finally:
-            conn.close()
+                return row, new_hp
+            finally:
+                conn.close()
+
+        print(f"[ThreadPool] DELETE spell DB write for target {target_id} dispatched to worker thread.")
+        row, new_hp = await _run_in_thread(_do_delete)
+
+    if row is None:
+        return {"success": False, "message": "Target not found or already deleted."}
+
+    if new_hp <= 0:
+        async with state.lock:
+            if target_id in state.enemies:
+                state.enemies[target_id].alive = False
+        await state.add_score(player_id, 25)
+        return {"success": True, "message": f"DELETE destroyed [{row['label']}]! +25 pts", "affected_id": target_id}
+    else:
+        async with state.lock:
+            if target_id in state.enemies:
+                state.enemies[target_id].hp = new_hp
+        await state.add_score(player_id, 10)
+        return {"success": True, "message": f"DELETE hit [{row['label']}] — {new_hp} HP left. +10 pts", "affected_id": target_id}
 
 
 async def _spell_insert(player_id: str) -> dict:
@@ -201,12 +237,11 @@ async def _spell_update(player_id: str, target_id: int | None) -> dict:
     if target_id is None:
         return {"success": False, "message": "UPDATE needs a target."}
 
-    # ── Room objective check ─────────────────────────────────────────────
+    # ── Room objective check ──────────────────────────────────────────────
     async with state.lock:
         enemy = state.enemies.get(target_id)
         if not enemy or not enemy.alive:
             return {"success": False, "message": "Target not found."}
-
         checker = ROOM_CHECKERS.get(state.room_number)
         if checker:
             valid, reason = checker(enemy.extra, "UPDATE")
@@ -216,67 +251,99 @@ async def _spell_update(player_id: str, target_id: int | None) -> dict:
                     p.hp = max(0, p.hp - 1)
                 return {"success": False, "message": reason}
 
+    # ── DB write in thread pool ───────────────────────────────────────────
     async with _db_lock:
-        conn = get_connection()
-        try:
-            room = state.current_room
-            row  = conn.execute(
-                f"SELECT * FROM {room} WHERE id = ? AND alive = 1", (target_id,)
-            ).fetchone()
-            if not row:
-                return {"success": False, "message": "Target not found."}
+        room = state.current_room
+        room_num = state.room_number
 
-            # Room 5 boss: advance from phase 2 → 3
-            if state.room_number == 5:
-                async with state.lock:
-                    e = state.enemies.get(target_id)
-                    if e and e.extra.get("phase") == 2:
-                        e.extra["phase"] = 3
-                        new_hp = max(1, row["hp"] // 3)
-                        e.hp = new_hp
-                        conn.execute(f"UPDATE {room} SET hp=?, phase=3 WHERE id=?", (new_hp, target_id))
+        def _do_update():
+            conn = get_connection()
+            try:
+                row = conn.execute(
+                    f"SELECT * FROM {room} WHERE id = ? AND alive = 1", (target_id,)
+                ).fetchone()
+                if not row:
+                    return None, None, None
+                # Room 5 boss phase 2 → 3
+                if room_num == 5:
+                    return row, row["hp"], "boss_check"
+                new_hp = max(1, row["hp"] // 2)
+                conn.execute(f"UPDATE {room} SET hp=? WHERE id=?", (new_hp, target_id))
+                conn.commit()
+                return row, new_hp, "normal"
+            finally:
+                conn.close()
+
+        print(f"[ThreadPool] UPDATE spell DB write for target {target_id} dispatched to worker thread.")
+        row, new_hp, mode = await _run_in_thread(_do_update)
+
+    if row is None:
+        return {"success": False, "message": "Target not found."}
+
+    if mode == "boss_check":
+        async with state.lock:
+            e = state.enemies.get(target_id)
+            if e and e.extra.get("phase") == 2:
+                e.extra["phase"] = 3
+                boss_hp = max(1, row["hp"] // 3)
+                e.hp = boss_hp
+
+                def _boss_update():
+                    conn = get_connection()
+                    try:
+                        conn.execute(f"UPDATE {room} SET hp=?, phase=3 WHERE id=?", (boss_hp, target_id))
                         conn.commit()
-                        await state.add_score(player_id, 30)
-                        return {"success": True, "message": f"UPDATE exploited weakness! Boss weakened to {new_hp} HP! Use DELETE to finish! +30 pts", "affected_id": target_id}
+                    finally:
+                        conn.close()
 
-            # Normal UPDATE: halve HP (Room 3 objective etc.)
-            new_hp = max(1, row["hp"] // 2)
-            conn.execute(f"UPDATE {room} SET hp=? WHERE id=?", (new_hp, target_id))
-            conn.commit()
-            async with state.lock:
-                if target_id in state.enemies:
-                    state.enemies[target_id].hp = new_hp
-            await state.add_score(player_id, 15)
+                await _run_in_thread(_boss_update)
+                await state.add_score(player_id, 30)
+                return {"success": True, "message": f"UPDATE exploited weakness! Boss weakened to {boss_hp} HP! Use DELETE to finish! +30 pts", "affected_id": target_id}
 
-            # Room 3: auto-kill when UPDATE reduces to 1 HP (objective complete for this enemy)
-            if state.room_number == 3 and new_hp <= 1:
-                conn2 = get_connection()
-                conn2.execute(f"UPDATE {room} SET hp=0, alive=0 WHERE id=?", (target_id,))
-                conn2.commit()
-                conn2.close()
-                async with state.lock:
-                    if target_id in state.enemies:
-                        state.enemies[target_id].alive = False
-                        state.enemies[target_id].hp = 0
-                return {"success": True, "message": f"UPDATE complete on [{row['label']}]! Record updated and cleared. +15 pts", "affected_id": target_id}
+    # Normal UPDATE path
+    async with state.lock:
+        if target_id in state.enemies:
+            state.enemies[target_id].hp = new_hp
+    await state.add_score(player_id, 15)
 
-            return {"success": True, "message": f"UPDATE weakened [{row['label']}] to {new_hp} HP. +15 pts", "affected_id": target_id}
-        finally:
-            conn.close()
+    if room_num == 3 and new_hp <= 1:
+        def _kill_dev():
+            conn = get_connection()
+            try:
+                conn.execute(f"UPDATE {room} SET hp=0, alive=0 WHERE id=?", (target_id,))
+                conn.commit()
+            finally:
+                conn.close()
+
+        await _run_in_thread(_kill_dev)
+        async with state.lock:
+            if target_id in state.enemies:
+                state.enemies[target_id].alive = False
+                state.enemies[target_id].hp = 0
+        return {"success": True, "message": f"UPDATE complete on [{row['label']}]! Record updated and cleared. +15 pts", "affected_id": target_id}
+
+    return {"success": True, "message": f"UPDATE weakened [{row['label']}] to {new_hp} HP. +15 pts", "affected_id": target_id}
 
 
 async def _spell_join() -> dict:
-    conn = get_connection()
-    try:
-        alive = conn.execute(
-            f"SELECT COUNT(*) as cnt FROM {state.current_room} WHERE alive = 1"
-        ).fetchone()["cnt"]
-        if alive > 0:
-            return {"success": False, "message": f"JOIN failed — {alive} enemies still alive!"}
-        conn.execute(
-            "UPDATE rooms SET unlocked=1 WHERE id=(SELECT id FROM rooms WHERE unlocked=0 ORDER BY id ASC LIMIT 1)"
-        )
-        conn.commit()
-        return {"success": True, "message": "JOIN successful — next room unlocked!"}
-    finally:
-        conn.close()
+    def _do_join():
+        conn = get_connection()
+        try:
+            alive = conn.execute(
+                f"SELECT COUNT(*) as cnt FROM {state.current_room} WHERE alive = 1"
+            ).fetchone()["cnt"]
+            if alive > 0:
+                return alive, False
+            conn.execute(
+                "UPDATE rooms SET unlocked=1 WHERE id=(SELECT id FROM rooms WHERE unlocked=0 ORDER BY id ASC LIMIT 1)"
+            )
+            conn.commit()
+            return alive, True
+        finally:
+            conn.close()
+
+    print(f"[ThreadPool] JOIN check dispatched to worker thread.")
+    alive, unlocked = await _run_in_thread(_do_join)
+    if not unlocked:
+        return {"success": False, "message": f"JOIN failed — {alive} enemies still alive!"}
+    return {"success": True, "message": "JOIN successful — next room unlocked!"}
