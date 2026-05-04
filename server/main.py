@@ -1,8 +1,11 @@
 import asyncio
 import json
 import re
+import time
+import os
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 
 from server.db import init_db, get_connection
@@ -11,17 +14,30 @@ from server.event_bus import bus
 from server.spell_engine import cast_spell
 from shared.constants import TICK_RATE
 
+_start_time = time.time()
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
     _load_room("enemies_room1")
+    # Start background tasks: game tick + event queue consumer
     asyncio.create_task(_game_tick_loop())
+    asyncio.create_task(bus.consume_events())   # <-- Queue consumer coroutine
     print("[Server] Data Raiders ready. Waiting for players...")
+    print(f"[Server] Tick rate: {TICK_RATE} Hz | Thread pool executor: active")
     yield
 
 
 app = FastAPI(title="Data Raiders", lifespan=lifespan)
+
+# ── Serve built Vite frontend from /client ────────────────────────────────────
+_dist_dir = os.path.join(os.path.dirname(__file__), "..", "webclient", "dist")
+if os.path.isdir(_dist_dir):
+    app.mount("/client", StaticFiles(directory=_dist_dir, html=True), name="client")
+    print(f"[Server] Serving frontend from {_dist_dir}")
+else:
+    print("[Server] No webclient/dist found — run `npm run build` in webclient/ to enable LAN serving.")
 
 
 def _load_room(table: str):
@@ -38,6 +54,12 @@ def _load_room(table: str):
 
 
 async def _game_tick_loop():
+    """
+    Game state synchronization loop.
+    Runs at TICK_RATE Hz and broadcasts the full game snapshot to all players.
+    This is the core of real-time multiplayer: every connected client receives
+    position, HP, and event data on every tick.
+    """
     interval = 1.0 / TICK_RATE
     while True:
         await asyncio.sleep(interval)
@@ -53,6 +75,33 @@ def _safe_query(sql: str) -> bool:
     first_word = s.split()[0].upper()
     return first_word == "SELECT"
 
+
+# ── Stats endpoint — exposes live concurrency metrics ────────────────────────
+
+@app.get("/stats")
+async def get_stats():
+    """
+    Returns live server metrics used by the in-game Server Stats widget.
+    Demonstrates that the distributed system is actively running:
+      - player_count:      how many WebSocket connections are open
+      - tick_rate:         game state broadcast frequency (Hz)
+      - uptime_seconds:    server uptime
+      - event_queue_size:  events pending in the async queue right now
+      - events_processed:  total events dispatched by the consumer task
+      - current_room:      active dungeon room
+    """
+    return JSONResponse({
+        "players_online": bus.player_count,
+        "tick_rate": TICK_RATE,
+        "uptime_seconds": int(time.time() - _start_time),
+        "event_queue_size": bus.queue_size,
+        "events_processed": bus.events_processed,
+        "current_room": state.current_room,
+        "room_number": state.room_number,
+    })
+
+
+# ── WebSocket endpoint ────────────────────────────────────────────────────────
 
 @app.websocket("/ws")
 async def websocket_endpoint(ws: WebSocket):
@@ -70,15 +119,17 @@ async def websocket_endpoint(ws: WebSocket):
 
     player = await state.add_player(player_name)
     await bus.connect(player.id, ws)
-    print(f"[Server] {player.name} joined (id={player.id})")
+    print(f"[Server] {player.name} joined (id={player.id}) | Players online: {bus.player_count}")
 
-    await bus.broadcast({
+    # Notify peers via queue (producer)
+    await bus.enqueue({
         "type": "player_joined",
         "player_id": player.id,
         "player_name": player.name,
         "color_idx": player.color_idx,
     }, exclude=player.id)
 
+    # Send private welcome directly (not via queue — must arrive before game state)
     await bus.send_to(player.id, {
         "type": "welcome",
         "player_id": player.id,
@@ -105,7 +156,8 @@ async def websocket_endpoint(ws: WebSocket):
                     "spell": spell,
                     **result,
                 })
-                await bus.broadcast({
+                # Spell cast event → enqueued for async broadcast (producer)
+                await bus.enqueue({
                     "type": "spell_cast",
                     "player_id": player.id,
                     "spell": spell,
@@ -113,7 +165,6 @@ async def websocket_endpoint(ws: WebSocket):
                 })
 
             elif msg_type == "query":
-                # In-game SQL terminal — read-only SELECT queries
                 sql = msg.get("sql", "").strip().rstrip(";").strip()
                 if not sql:
                     await bus.send_to(player.id, {
@@ -161,19 +212,18 @@ async def websocket_endpoint(ws: WebSocket):
             elif msg_type == "reset":
                 init_db()
                 _load_room("enemies_room1")
-                # Reset player HP and scores
                 async with state.lock:
                     for p in state.players.values():
                         p.hp = p.max_hp
                         p.score = 0
                 print(f"[Server] {player.name} triggered a game reset.")
-                await bus.broadcast({
+                # Reset notification → enqueued
+                await bus.enqueue({
                     "type": "reset_ack",
                     "message": f"{player.name} reset the game!",
                 })
 
             elif msg_type == "next_room":
-                # Find the next locked room
                 conn = get_connection()
                 next_room = conn.execute("SELECT * FROM rooms WHERE unlocked=0 ORDER BY id ASC LIMIT 1").fetchone()
                 if next_room:
@@ -182,12 +232,11 @@ async def websocket_endpoint(ws: WebSocket):
                     tbl = next_room["table_ref"]
                     conn.close()
                     _load_room(tbl)
-                    # Reset all player positions on room change
                     async with state.lock:
                         for i, p in enumerate(state.players.values()):
                             p.x = float((i + 1) * 2 * 56)
                             p.y = float(2 * 56)
-                    await bus.broadcast({
+                    await bus.enqueue({
                         "type": "reset_ack",
                         "message": f"Entering Room {next_room['id']}: {next_room['name']}!",
                     })
@@ -198,7 +247,7 @@ async def websocket_endpoint(ws: WebSocket):
                         for p in state.players.values():
                             total_scores.append(f"{p.name}: {p.score} pts")
                     score_str = " | ".join(total_scores)
-                    await bus.broadcast({
+                    await bus.enqueue({
                         "type": "spell_result",
                         "player_id": player.id,
                         "spell": "JOIN",
@@ -207,7 +256,7 @@ async def websocket_endpoint(ws: WebSocket):
                     })
 
             elif msg_type == "chat":
-                await bus.broadcast({
+                await bus.enqueue({
                     "type": "chat",
                     "sender": player.name,
                     "text": msg.get("text", ""),
@@ -219,5 +268,5 @@ async def websocket_endpoint(ws: WebSocket):
         if player:
             await state.remove_player(player.id)
             await bus.disconnect(player.id)
-            await bus.broadcast({"type": "player_left", "player_id": player.id})
-            print(f"[Server] {player.name} disconnected.")
+            await bus.enqueue({"type": "player_left", "player_id": player.id})
+            print(f"[Server] {player.name} disconnected. | Players online: {bus.player_count}")
