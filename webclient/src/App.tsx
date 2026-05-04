@@ -17,6 +17,7 @@ export default function App() {
   const [sqlInput, setSqlInput] = useState("");
   const [queryResult, setQueryResult] = useState<any>(null);
   const [onlineCount, setOnlineCount] = useState(1);
+  const [serverStats, setServerStats] = useState<any>(null);
   const [ws, setWs] = useState<WebSocket | null>(null);
   const [gameState, setGameState] = useState<any>(null);
   const [myId, setMyId] = useState<string | null>(null);
@@ -98,6 +99,27 @@ export default function App() {
   }, [playerName, playerClass, view, gameMode]);
 
   useEffect(() => {
+    if (view !== 'GAME') return;
+    const pollStats = async () => {
+      try {
+        const loc = window.location;
+        const protocol = loc.protocol === "https:" ? "https:" : "http:";
+        const url = `${protocol}//${loc.hostname}:8000/stats`;
+        const res = await fetch(url);
+        if (res.ok) {
+          const data = await res.json();
+          setServerStats(data);
+        }
+      } catch (err) {
+        // silently fail if server is down or unreachable
+      }
+    };
+    pollStats();
+    const iv = setInterval(pollStats, 2000);
+    return () => clearInterval(iv);
+  }, [view]);
+
+  useEffect(() => {
     if (view === 'GAME' && gameMode === 'Speedrun' && speedrunStart) {
       const iv = setInterval(() => {
         setElapsedTime(Date.now() - speedrunStart);
@@ -105,6 +127,22 @@ export default function App() {
       return () => clearInterval(iv);
     }
   }, [view, gameMode, speedrunStart]);
+
+  // Poll /stats endpoint for Server Stats widget
+  useEffect(() => {
+    if (view !== 'GAME') return;
+    const loc = window.location;
+    const statsUrl = `${loc.protocol}//${loc.hostname}:8000/stats`;
+    const fetchStats = () => {
+      fetch(statsUrl)
+        .then(r => r.json())
+        .then(setServerStats)
+        .catch(() => {});
+    };
+    fetchStats();
+    const iv = setInterval(fetchStats, 2000);
+    return () => clearInterval(iv);
+  }, [view]);
 
   const formatTime = (ms: number) => {
     const totalSeconds = Math.floor(ms / 1000);
@@ -147,7 +185,7 @@ export default function App() {
   }, [roomNum]);
 
   useEffect(() => {
-    if (view === 'GAME' && !localStorage.getItem('tutorialDone')) {
+    if (view === 'GAME') {
       setTutorialStep(1);
     }
   }, [view]);
@@ -366,8 +404,8 @@ export default function App() {
 
   // view === 'GAME'
   return (
-    <div className={`h-full w-full bg-[#1b3d1b] overflow-x-auto overflow-y-hidden custom-scrollbar ${useCRT ? 'crt relative' : ''}`}>
-      <div className="min-w-[1100px] h-full p-3 md:p-5 text-[#fde6b3] font-sans flex flex-row gap-5 relative z-10">
+    <div className={`h-full w-full bg-[#1b3d1b] overflow-hidden ${useCRT ? 'crt relative' : ''}`}>
+      <div className="w-full h-full p-3 md:p-5 text-[#fde6b3] font-sans flex flex-row gap-5 relative z-10">
         
         {/* ── LEFT COLUMN (Data & Context) ────────────────── */}
         <div className="flex flex-col w-[280px] lg:w-[320px] gap-3 shrink-0 h-full overflow-y-auto custom-scrollbar pr-1 pb-2">
@@ -492,6 +530,22 @@ export default function App() {
       {/* ── RIGHT COLUMN (Interaction) ─────────────────── */}
       <div className="flex flex-col w-[280px] lg:w-[320px] gap-3 shrink-0 h-full overflow-y-auto custom-scrollbar pl-1 pb-2">
         
+        {/* Server Stats Widget */}
+        {serverStats && (
+          <div className="bg-[#5c3e21] border-[4px] border-[#3e240f] rounded-xl p-2 shadow-[inset_0_0_10px_rgba(0,0,0,0.5),0_6px_12px_rgba(0,0,0,0.5)] shrink-0">
+            <h2 className="text-[10px] font-black text-[#facc15] tracking-wider mb-1 flex items-center justify-between">
+              <span>SERVER METRICS</span>
+              <span className="text-[#4ade80] font-mono shadow-inner bg-[#2e1d0d] px-1.5 py-0.5 rounded border border-[#1e1208]">LIVE</span>
+            </h2>
+            <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[9px] font-mono text-[#fde6b3] font-bold">
+              <div className="bg-[#3e240f] px-1.5 py-0.5 rounded">Players: <span className="text-white">{serverStats.players_online}</span></div>
+              <div className="bg-[#3e240f] px-1.5 py-0.5 rounded">Tick: <span className="text-white">{serverStats.tick_rate}Hz</span></div>
+              <div className="bg-[#3e240f] px-1.5 py-0.5 rounded">Uptime: <span className="text-white">{serverStats.uptime_seconds}s</span></div>
+              <div className="bg-[#3e240f] px-1.5 py-0.5 rounded">Q / Proc: <span className="text-white">{serverStats.event_queue_size} / {serverStats.events_processed}</span></div>
+            </div>
+          </div>
+        )}
+
         {/* SQL Terminal */}
         <div className="bg-[#5c3e21] border-[6px] border-[#3e240f] rounded-2xl p-3 flex flex-col shrink-0 shadow-[inset_0_0_10px_rgba(0,0,0,0.5),0_6px_12px_rgba(0,0,0,0.5)]">
           <h2 className="text-sm font-black text-[#4ade80] tracking-wider mb-2 flex items-center gap-1.5 drop-shadow-sm">
@@ -520,7 +574,7 @@ export default function App() {
         </div>
 
         {/* Chat / Logs */}
-        <div className="bg-[#784f2b] border-[4px] border-[#523315] rounded-xl flex flex-col p-3 flex-1 min-h-[250px] shadow-inner">
+        <div className="bg-[#784f2b] border-[4px] border-[#523315] rounded-xl flex flex-col p-3 flex-1 min-h-0 shadow-inner overflow-hidden">
           <div className="flex justify-between items-center mb-2">
             <h2 className="text-sm font-black text-[#ffdb7a] tracking-wider flex items-center drop-shadow-sm">
               LOGS
@@ -570,10 +624,34 @@ export default function App() {
           </div>
         </div>
 
+        {/* Server Stats */}
+        {serverStats && (
+          <div className="bg-[#1b3d1b] border-[4px] border-[#0d1f0d] rounded-xl p-2.5 shadow-inner shrink-0">
+            <h2 className="text-[10px] font-black text-[#4ade80] tracking-wider mb-1.5 flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#4ade80] shadow-[0_0_6px_rgba(74,222,128,0.8)] animate-pulse"></span>
+              SERVER STATS
+            </h2>
+            <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[10px] font-mono">
+              <span className="text-[#86efac]">Players</span>
+              <span className="text-[#fde6b3] text-right">{serverStats.players_online}</span>
+              <span className="text-[#86efac]">Tick Rate</span>
+              <span className="text-[#fde6b3] text-right">{serverStats.tick_rate} Hz</span>
+              <span className="text-[#86efac]">Queue</span>
+              <span className="text-[#fde6b3] text-right">{serverStats.event_queue_size} pending</span>
+              <span className="text-[#86efac]">Events</span>
+              <span className="text-[#fde6b3] text-right">{serverStats.events_processed} total</span>
+              <span className="text-[#86efac]">Uptime</span>
+              <span className="text-[#fde6b3] text-right">{Math.floor(serverStats.uptime_seconds / 60)}m {serverStats.uptime_seconds % 60}s</span>
+              <span className="text-[#86efac]">Room</span>
+              <span className="text-[#fde6b3] text-right">{serverStats.room_number}/5</span>
+            </div>
+          </div>
+        )}
+
         {/* Controls */}
-        <div className="bg-[#5c3e21] border-[4px] border-[#3e240f] rounded-xl p-2 shadow-inner shrink-0 mt-auto">
-          <h2 className="text-[10px] font-black text-[#d4b483] tracking-wider mb-2">CONTROLS</h2>
-          <div className="flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-[#fde6b3] font-semibold">
+        <div className="bg-[#5c3e21] border-[4px] border-[#3e240f] rounded-xl p-2 shadow-inner shrink-0">
+          <h2 className="text-[10px] font-black text-[#d4b483] tracking-wider mb-1">CONTROLS</h2>
+          <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-[10px] text-[#fde6b3] font-semibold">
             <span><b className="text-[#ffdb7a]">WASD</b> move</span>
             <span><b className="text-[#ffdb7a]">1-5</b> spell</span>
             <span><b className="text-[#ffdb7a]">E</b> cast</span>
@@ -588,8 +666,8 @@ export default function App() {
         <div className="absolute inset-0 z-50 flex flex-col pointer-events-auto">
           
           {/* Mirror Layout for Highlights */}
-          <div className="absolute inset-0 p-3 md:p-5 overflow-x-auto overflow-y-hidden custom-scrollbar pointer-events-none">
-            <div className="min-w-[1100px] h-full flex flex-row gap-5">
+          <div className="absolute inset-0 p-3 md:p-5 overflow-hidden pointer-events-none">
+            <div className="w-full h-full flex flex-row gap-5">
               <div className={`w-[280px] lg:w-[320px] shrink-0 h-full rounded-2xl transition-all duration-500 ${tutorialStep === 3 ? 'shadow-[0_0_0_9999px_rgba(0,0,0,0.8),inset_0_0_20px_#facc15] border-[4px] border-[#facc15] bg-[#facc15]/10' : ''}`}></div>
               <div className={`flex-1 h-full rounded-2xl transition-all duration-500 ${tutorialStep === 2 ? 'shadow-[0_0_0_9999px_rgba(0,0,0,0.8),inset_0_0_20px_#facc15] border-[4px] border-[#facc15] bg-[#facc15]/10' : ''}`}></div>
               <div className={`w-[280px] lg:w-[320px] shrink-0 h-full rounded-2xl transition-all duration-500 ${(tutorialStep === 4 || tutorialStep === 5) ? 'shadow-[0_0_0_9999px_rgba(0,0,0,0.8),inset_0_0_20px_#facc15] border-[4px] border-[#facc15] bg-[#facc15]/10' : ''}`}></div>
@@ -617,19 +695,26 @@ export default function App() {
                 {tutorialStep === 6 && "You are ready! Use your intel, type your spells, and clear the database room. Good luck!"}
               </p>
             </div>
-            <button 
-              onClick={() => {
-                if (tutorialStep === 6) {
-                  setTutorialStep(0);
-                  localStorage.setItem('tutorialDone', 'true');
-                } else {
-                  setTutorialStep(s => s + 1);
-                }
-              }}
-              className="bg-[#d97706] hover:bg-[#b45309] active:bg-[#92400e] text-[#fde6b3] border-b-[6px] border-[#92400e] active:border-b-0 active:translate-y-[6px] font-pixelify tracking-widest px-8 py-4 rounded-xl text-2xl transition-all shrink-0 shadow-lg mt-4 md:mt-0"
-            >
-              {tutorialStep === 6 ? "START" : "NEXT ➔"}
-            </button>
+            <div className="flex gap-3 shrink-0 mt-4 md:mt-0">
+              <button 
+                onClick={() => setTutorialStep(0)}
+                className="bg-[#5c3e21] hover:bg-[#3e240f] text-[#d4b483] border-b-[6px] border-[#3e240f] active:border-b-0 active:translate-y-[6px] font-pixelify tracking-widest px-6 py-4 rounded-xl text-2xl transition-all shadow-lg"
+              >
+                SKIP
+              </button>
+              <button 
+                onClick={() => {
+                  if (tutorialStep === 6) {
+                    setTutorialStep(0);
+                  } else {
+                    setTutorialStep(s => s + 1);
+                  }
+                }}
+                className="bg-[#d97706] hover:bg-[#b45309] active:bg-[#92400e] text-[#fde6b3] border-b-[6px] border-[#92400e] active:border-b-0 active:translate-y-[6px] font-pixelify tracking-widest px-8 py-4 rounded-xl text-2xl transition-all shadow-lg"
+              >
+                {tutorialStep === 6 ? "START" : "NEXT ➔"}
+              </button>
+            </div>
           </div>
         </div>
       )}
