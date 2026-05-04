@@ -179,6 +179,7 @@ export default function GameCanvas({ ws, gameState, myId, attacks, onRequestQuit
   }, []);
 
   const changingRoomRef = useRef(false);
+  const isHoveringQuitRef = useRef(false);
   const wsRef = useRef<WebSocket | null>(null);
   useEffect(() => { wsRef.current = ws; }, [ws]);
 
@@ -596,13 +597,14 @@ export default function GameCanvas({ ws, gameState, myId, attacks, onRequestQuit
       const quitW = 86;
       const quitX = gw - 14 - quitW;
       const quitY = hudY + 10;
+      const hoveringQuit = isHoveringQuitRef.current;
       rrect(ctx, quitX, quitY, quitW, 30, 6);
-      ctx.fillStyle = "#523315"; // wooden inactive btn
+      ctx.fillStyle = hoveringQuit ? "#784b1f" : "#523315"; // lighter if hovered
       ctx.fill();
-      ctx.strokeStyle = "#2e1d0d"; // wooden edge
+      ctx.strokeStyle = hoveringQuit ? "#4a2e15" : "#2e1d0d"; 
       ctx.lineWidth = 2;
       ctx.stroke();
-      ctx.fillStyle = "#ef4444"; // red text for quit
+      ctx.fillStyle = hoveringQuit ? "#f87171" : "#ef4444"; // brighter red if hovered
       ctx.font = "bold 12px 'Segoe UI', sans-serif";
       ctx.textAlign = "center";
       ctx.fillText("QUIT", quitX + quitW / 2, hudY + 30);
@@ -616,6 +618,35 @@ export default function GameCanvas({ ws, gameState, myId, attacks, onRequestQuit
     return () => cancelAnimationFrame(raf);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const cvs = canvasRef.current;
+    if (!cvs) return;
+    const rect = cvs.getBoundingClientRect();
+    const scaleX = cvs.width / rect.width;
+    const scaleY = cvs.height / rect.height;
+    const x = (e.clientX - rect.left) * scaleX;
+    const y = (e.clientY - rect.top) * scaleY;
+
+    const gw = COLS * TILE;
+    const hudY = ROWS * TILE;
+    const quitW = 86;
+    const quitX = gw - 14 - quitW;
+    const quitY = hudY + 10;
+    
+    if (x >= quitX && x <= quitX + quitW && y >= quitY && y <= quitY + 30) {
+      isHoveringQuitRef.current = true;
+      cvs.style.cursor = "pointer";
+    } else {
+      isHoveringQuitRef.current = false;
+      cvs.style.cursor = "default";
+    }
+  };
+
+  const handleMouseLeave = () => {
+    isHoveringQuitRef.current = false;
+    if (canvasRef.current) canvasRef.current.style.cursor = "default";
+  };
 
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const cvs = canvasRef.current;
@@ -653,6 +684,8 @@ export default function GameCanvas({ ws, gameState, myId, attacks, onRequestQuit
     <canvas
       ref={canvasRef}
       onMouseDown={handleMouseDown}
+      onMouseMove={handleMouseMove}
+      onMouseLeave={handleMouseLeave}
       width={896}
       height={722}
       tabIndex={0}
