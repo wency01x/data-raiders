@@ -51,7 +51,7 @@ npm run dev
 
 ## Multiplayer Game System Implementation Details
 
-This project is perfectly aligned with the **Option A - Multiplayer Game System** rubric.
+This project is aligned with the **Option A - Multiplayer Game System** rubric.
 
 ### 1. Minimum System Requirements
 
