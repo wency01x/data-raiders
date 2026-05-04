@@ -49,7 +49,7 @@ npm run dev
 - **Visual Fidelity**: Beautiful animated sprites and dynamic canvas elements in the react interface.
 - **Cross-Platform Play**: Enjoy the game from either the desktop Pygame client or the modern React web client.
 
-## Option A - Multiplayer Game System Implementation Details
+## Multiplayer Game System Implementation Details
 
 This project is perfectly aligned with the **Option A - Multiplayer Game System** rubric.
 
