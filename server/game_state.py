@@ -174,11 +174,25 @@ class GameState:
         spells_str = room_row["allowed_spells"] if room_row else "SELECT,DELETE"
         self.allowed_spells = [s.strip() for s in spells_str.split(",")]
 
-    async def damage_player(self, player_id: str, amount: int = 1):
+    async def damage_player(self, player_id: str, amount: int = 1) -> bool:
+        """Returns True if this damage killed the player (hp just hit 0)."""
+        async with self.lock:
+            p = self.players.get(player_id)
+            if not p:
+                return False
+            was_alive = p.hp > 0
+            p.hp = max(0, p.hp - amount)
+            return was_alive and p.hp == 0
+
+    async def respawn_player(self, player_id: str):
+        """Reset a dead player's HP and move them back to a safe spawn position."""
         async with self.lock:
             p = self.players.get(player_id)
             if p:
-                p.hp = max(0, p.hp - amount)
+                p.hp = p.max_hp
+                idx = list(self.players.keys()).index(player_id)
+                p.x = float((idx + 1) * 2 * TILE_SIZE)
+                p.y = float(2 * TILE_SIZE)
 
     async def add_score(self, player_id: str, amount: int = 10):
         async with self.lock:
