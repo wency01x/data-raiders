@@ -12,11 +12,22 @@ export default function App() {
   const [tutorialStep, setTutorialStep] = useState(0);
 
   // ── Lobby / server-browser state ─────────────────────────────────────────
-  const [serverHost, setServerHost] = useState(() => window.location.hostname);
-  const [lobbyInfo, setLobbyInfo] = useState<any>(null);
-  const [isPinging, setIsPinging] = useState(false);
-  const [pingError, setPingError] = useState('');
   const [lobbyMode, setLobbyMode] = useState<'create' | 'join'>('create');
+
+  // CREATE LOBBY — always points at YOUR local server (localhost)
+  const [hostInfo, setHostInfo]           = useState<any>(null);
+  const [isHostPinging, setIsHostPinging] = useState(false);
+  const [lobbyIsOpen, setLobbyIsOpen]     = useState(false);
+  const [isOpening, setIsOpening]         = useState(false);
+
+  // JOIN SERVER — whatever IP the user types
+  const [joinIp, setJoinIp]           = useState('');
+  const [joinInfo, setJoinInfo]       = useState<any>(null);
+  const [isJoinPinging, setIsJoinPinging] = useState(false);
+  const [joinError, setJoinError]     = useState('');
+
+  // Derived: which host does the WebSocket connect to?
+  const serverHost = lobbyMode === 'create' ? window.location.hostname : joinIp;
   
   const [messages, setMessages] = useState<string[]>([]);
   const [inputVal, setInputVal] = useState("");
@@ -92,6 +103,12 @@ export default function App() {
             setAttacks((a) => ({ ...a, [msg.player_id]: Date.now() }));
           }
           break;
+        case "lobby_closed":
+          // Server rejected us — lobby not open yet, go back to lobby screen
+          setMessages([]);
+          setView('LOBBY');
+          alert('The host closed the lobby or it is not open yet. Please wait.');
+          break;
         case "player_died":
           if (msg.player_id === myIdRef.current) {
             setShowDeathScreen(true);
@@ -120,26 +137,58 @@ export default function App() {
     return () => { socket.close(); };
   }, [playerName, playerClass, view, gameMode, serverHost]);
 
-  const pingServer = async (host?: string) => {
-    const target = host ?? serverHost;
-    setIsPinging(true);
-    setPingError('');
+  const pingLocalServer = async () => {
+    setIsHostPinging(true);
     try {
-      const protocol = window.location.protocol;
-      const res = await fetch(`${protocol}//${target}:8000/lobby`);
-      if (!res.ok) throw new Error('bad response');
-      setLobbyInfo(await res.json());
+      const res = await fetch(`${window.location.protocol}//${window.location.hostname}:8000/lobby`);
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setHostInfo(data);
+      setLobbyIsOpen(data.open === true);
     } catch {
-      setPingError('Could not reach server at this address.');
-      setLobbyInfo(null);
+      setHostInfo(null);
+      setLobbyIsOpen(false);
     } finally {
-      setIsPinging(false);
+      setIsHostPinging(false);
     }
   };
 
-  // Auto-ping when entering the lobby view
+  const openLobby = async () => {
+    setIsOpening(true);
+    try {
+      await fetch(`${window.location.protocol}//${window.location.hostname}:8000/lobby/open`, { method: 'POST' });
+      setLobbyIsOpen(true);
+      // Re-ping to refresh info
+      await pingLocalServer();
+    } catch {
+      // ignore
+    } finally {
+      setIsOpening(false);
+    }
+  };
+
+  const pingJoinServer = async (ip: string) => {
+    if (!ip.trim()) return;
+    setIsJoinPinging(true);
+    setJoinError('');
+    setJoinInfo(null);
+    try {
+      const res = await fetch(`${window.location.protocol}//${ip.trim()}:8000/lobby`);
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setJoinInfo(data);
+      setJoinIp(ip.trim()); // lock in the successfully-pinged IP
+    } catch {
+      setJoinError('Could not reach server at that address. Is the host running python3 runserver.py?');
+      setJoinInfo(null);
+    } finally {
+      setIsJoinPinging(false);
+    }
+  };
+
+  // Auto-ping localhost when entering the lobby view
   useEffect(() => {
-    if (view === 'LOBBY') pingServer();
+    if (view === 'LOBBY') pingLocalServer();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view]);
 
@@ -359,10 +408,11 @@ export default function App() {
   }
 
   if (view === 'LOBBY') {
-    const uptime = lobbyInfo ? (() => {
-      const s = lobbyInfo.uptime_seconds;
+    const fmtUptime = (info: any) => {
+      if (!info) return null;
+      const s = info.uptime_seconds;
       return `${Math.floor(s / 60)}m ${s % 60}s`;
-    })() : null;
+    };
 
     // Shared player setup block
     const PlayerSetup = (
@@ -410,7 +460,7 @@ export default function App() {
           {/* Mode Tab Switcher */}
           <div className="flex gap-0 bg-[#2e1d0d] border-[4px] border-[#1e1208] rounded-2xl p-1.5">
             <button
-              onClick={() => { setLobbyMode('create'); setServerHost(window.location.hostname); setLobbyInfo(null); pingServer(window.location.hostname); }}
+              onClick={() => { setLobbyMode('create'); pingLocalServer(); }}
               className={`flex-1 py-3 rounded-xl font-pixelify tracking-widest text-lg transition-all ${
                 lobbyMode === 'create'
                   ? 'bg-[#4ade80] text-[#064e3b] shadow-[0_0_15px_rgba(74,222,128,0.5)] border-b-[4px] border-[#16a34a]'
@@ -420,7 +470,7 @@ export default function App() {
               🏰 CREATE LOBBY
             </button>
             <button
-              onClick={() => { setLobbyMode('join'); setLobbyInfo(null); setPingError(''); }}
+              onClick={() => { setLobbyMode('join'); setJoinInfo(null); setJoinError(''); }}
               className={`flex-1 py-3 rounded-xl font-pixelify tracking-widest text-lg transition-all ${
                 lobbyMode === 'join'
                   ? 'bg-[#38bdf8] text-[#0c4a6e] shadow-[0_0_15px_rgba(56,189,248,0.5)] border-b-[4px] border-[#0369a1]'
@@ -442,14 +492,14 @@ export default function App() {
                     <span className="w-2 h-2 rounded-full bg-[#4ade80] shadow-[0_0_8px_rgba(74,222,128,0.8)] animate-pulse" />
                     YOUR SERVER IS READY
                   </h2>
-                  {isPinging ? (
+                  {isHostPinging ? (
                     <p className="text-xs text-[#d4b483] italic text-center animate-pulse">Detecting your server IP...</p>
-                  ) : lobbyInfo ? (
+                  ) : hostInfo ? (
                     <>
                       <div className="text-center">
                         <p className="text-[10px] text-[#d4b483] mb-1 tracking-wider font-semibold">SHARE THIS IP WITH YOUR FRIENDS</p>
                         <div className="font-mono text-[#ffdb7a] text-2xl font-black bg-[#1e1208] rounded-lg py-4 px-4 border-2 border-[#2e1d0d] shadow-inner tracking-widest select-all cursor-text">
-                          {lobbyInfo.server_ip}
+                          {hostInfo.server_ip}
                         </div>
                       </div>
                       <div className="grid grid-cols-3 gap-2 text-xs font-mono text-center">
@@ -459,20 +509,39 @@ export default function App() {
                         </div>
                         <div className="bg-[#2e1d0d] rounded-lg p-2 border border-[#1e1208]">
                           <p className="text-[#86efac] text-[10px] mb-0.5">PLAYERS</p>
-                          <p className="text-[#fde6b3] font-black">{lobbyInfo.players_online}</p>
+                          <p className="text-[#fde6b3] font-black">{hostInfo.players_online}</p>
                         </div>
                         <div className="bg-[#2e1d0d] rounded-lg p-2 border border-[#1e1208]">
                           <p className="text-[#86efac] text-[10px] mb-0.5">UPTIME</p>
-                          <p className="text-[#fde6b3] font-black">{uptime}</p>
+                          <p className="text-[#fde6b3] font-black">{fmtUptime(hostInfo)}</p>
                         </div>
                       </div>
-                      <p className="text-[10px] text-[#d4b483] italic text-center">💡 Make sure your friends are on the same network and enter your IP in the &quot;Join Server&quot; tab.</p>
+
+                      {/* Lobby open/closed status + action */}
+                      {lobbyIsOpen ? (
+                        <div className="flex items-center justify-center gap-2 bg-[#14532d]/40 border border-[#4ade80]/40 rounded-lg py-3 px-4">
+                          <span className="w-2.5 h-2.5 rounded-full bg-[#4ade80] shadow-[0_0_10px_rgba(74,222,128,0.9)] animate-pulse" />
+                          <span className="text-[#4ade80] font-black text-sm tracking-widest">LOBBY OPEN — Friends can now join!</span>
+                        </div>
+                      ) : (
+                        <>
+                          <p className="text-[10px] text-[#fca5a5] text-center font-semibold">🔒 Lobby is closed — friends cannot join yet.</p>
+                          <button
+                            onClick={openLobby}
+                            disabled={isOpening}
+                            className="w-full bg-[#d97706] hover:bg-[#b45309] active:bg-[#92400e] disabled:opacity-60 text-[#fde6b3] border-b-[4px] border-[#92400e] active:border-b-0 active:translate-y-[4px] font-pixelify tracking-widest py-3 rounded-xl text-lg transition-all shadow-[0_0_15px_rgba(217,119,6,0.4)]"
+                          >
+                            {isOpening ? 'Opening...' : '🔓 OPEN LOBBY'}
+                          </button>
+                          <p className="text-[10px] text-[#d4b483] italic text-center">You must open the lobby before friends can join.</p>
+                        </>
+                      )}
                     </>
                   ) : (
                     <div className="text-center py-2">
                       <p className="text-xs text-[#fca5a5] font-mono">Could not detect local server.</p>
                       <p className="text-[10px] text-[#d4b483] mt-1">Make sure <code className="bg-[#1e1208] px-1 rounded">python3 runserver.py</code> is running.</p>
-                      <button onClick={() => pingServer(window.location.hostname)} className="mt-3 text-xs bg-[#3e240f] hover:bg-[#523315] text-[#d4b483] px-4 py-1.5 rounded-lg border border-[#2e1d0d] transition-colors">
+                      <button onClick={pingLocalServer} className="mt-3 text-xs bg-[#3e240f] hover:bg-[#523315] text-[#d4b483] px-4 py-1.5 rounded-lg border border-[#2e1d0d] transition-colors">
                         Retry
                       </button>
                     </div>
@@ -486,9 +555,9 @@ export default function App() {
                     className="flex-1 bg-[#5c3e21] hover:bg-[#3e240f] text-[#d4b483] border-b-[4px] border-[#3e240f] active:border-b-0 active:translate-y-[4px] font-pixelify tracking-wider px-6 py-4 rounded-xl text-xl transition-all">
                     ← BACK
                   </button>
-                  <button onClick={() => setView('LOADING')} disabled={!lobbyInfo}
+                  <button onClick={() => setView('LOADING')} disabled={!hostInfo || !lobbyIsOpen}
                     className="flex-grow-[2] bg-[#4ade80] hover:bg-[#22c55e] active:bg-[#16a34a] disabled:bg-[#3e240f] disabled:text-[#6b4c2a] disabled:cursor-not-allowed text-[#064e3b] border-b-[4px] border-[#16a34a] active:border-b-0 active:translate-y-[4px] font-pixelify tracking-widest px-8 py-4 rounded-xl text-xl transition-all shadow-[0_0_20px_rgba(74,222,128,0.4)]">
-                    {lobbyInfo ? 'START AS HOST ➔' : 'SERVER NOT FOUND'}
+                    {!hostInfo ? 'SERVER NOT FOUND' : !lobbyIsOpen ? '🔒 OPEN LOBBY FIRST' : 'START AS HOST ➔'}
                   </button>
                 </div>
               </div>
@@ -500,35 +569,38 @@ export default function App() {
                   <div className="flex gap-2">
                     <input
                       type="text"
-                      value={serverHost}
-                      onChange={(e) => setServerHost(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && pingServer(serverHost)}
-                      placeholder="192.168.x.x"
+                      value={joinIp}
+                      onChange={(e) => { setJoinIp(e.target.value); setJoinInfo(null); setJoinError(''); }}
+                      onKeyDown={(e) => e.key === 'Enter' && pingJoinServer(joinIp)}
+                      placeholder="Ask your friend for their IP →"
                       className="flex-1 min-w-0 bg-[#2e1d0d] border-[3px] border-[#1e1208] rounded px-3 py-2 text-sm font-mono text-[#4ade80] placeholder-[#784f2b] focus:outline-none focus:border-[#38bdf8] transition-colors shadow-inner"
                     />
-                    <button onClick={() => pingServer(serverHost)} disabled={isPinging}
+                    <button onClick={() => pingJoinServer(joinIp)} disabled={isJoinPinging || !joinIp.trim()}
                       className="bg-[#0369a1] hover:bg-[#0284c7] active:bg-[#075985] text-white font-black px-4 py-2 rounded-lg text-xs transition-colors disabled:opacity-50 border-b-[3px] border-[#075985] active:border-b-0 active:translate-y-[3px]">
-                      {isPinging ? '⏳...' : 'PING'}
+                      {isJoinPinging ? '⏳...' : 'PING'}
                     </button>
                   </div>
-                  {pingError && <p className="text-xs text-[#fca5a5] font-mono">{pingError}</p>}
-                  {!lobbyInfo && !isPinging && !pingError && (
+                  {joinError && <p className="text-xs text-[#fca5a5] font-mono">{joinError}</p>}
+                  {!joinInfo && !isJoinPinging && !joinError && (
                     <p className="text-[10px] text-[#d4b483] italic">Ask your friend for their IP from the &quot;Create Lobby&quot; tab, then enter it here and press PING.</p>
                   )}
-                  {lobbyInfo && (
+                  {joinInfo && (
                     <div className="bg-[#1e1208] rounded-lg p-3 border-2 border-[#38bdf8]/30 grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs font-mono">
                       <span className="text-[#86efac]">Status</span>
-                      <span className="text-[#4ade80] font-bold flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-[#4ade80] animate-pulse inline-block" />
-                        Online
+                      <span className={`font-bold flex items-center gap-1 ${joinInfo.open ? 'text-[#4ade80]' : 'text-[#fca5a5]'}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full inline-block ${joinInfo.open ? 'bg-[#4ade80] animate-pulse' : 'bg-[#fca5a5]'}`} />
+                        {joinInfo.open ? 'Open' : '🔒 Lobby Closed'}
                       </span>
                       <span className="text-[#86efac]">Server IP</span>
-                      <span className="text-[#fde6b3] font-bold">{lobbyInfo.server_ip}</span>
+                      <span className="text-[#fde6b3] font-bold">{joinInfo.server_ip}</span>
                       <span className="text-[#86efac]">Players</span>
-                      <span className="text-[#fde6b3] font-bold">{lobbyInfo.players_online} online</span>
+                      <span className="text-[#fde6b3] font-bold">{joinInfo.players_online} online</span>
                       <span className="text-[#86efac]">Room Progress</span>
-                      <span className="text-[#fde6b3] font-bold">{lobbyInfo.room_number} / 5</span>
+                      <span className="text-[#fde6b3] font-bold">{joinInfo.room_number} / 5</span>
                     </div>
+                  )}
+                  {joinInfo && !joinInfo.open && (
+                    <p className="text-xs text-[#fca5a5] font-semibold text-center">🔒 The host hasn&apos;t opened the lobby yet. Ask them to click &quot;Open Lobby&quot; in the Create Lobby tab.</p>
                   )}
                 </div>
 
@@ -539,9 +611,9 @@ export default function App() {
                     className="flex-1 bg-[#5c3e21] hover:bg-[#3e240f] text-[#d4b483] border-b-[4px] border-[#3e240f] active:border-b-0 active:translate-y-[4px] font-pixelify tracking-wider px-6 py-4 rounded-xl text-xl transition-all">
                     ← BACK
                   </button>
-                  <button onClick={() => setView('LOADING')} disabled={!lobbyInfo}
+                  <button onClick={() => setView('LOADING')} disabled={!joinInfo || !joinInfo.open}
                     className="flex-grow-[2] bg-[#d97706] hover:bg-[#b45309] active:bg-[#92400e] disabled:bg-[#5c3e21] disabled:text-[#6b4c2a] disabled:border-[#3e240f] disabled:cursor-not-allowed text-[#fde6b3] border-b-[4px] border-[#92400e] active:border-b-0 active:translate-y-[4px] font-pixelify tracking-widest px-8 py-4 rounded-xl text-xl transition-all shadow-[0_0_20px_rgba(217,119,6,0.4)]">
-                    {lobbyInfo ? 'JOIN SERVER ➔' : 'PING FIRST...'}
+                    {!joinInfo ? 'PING FIRST...' : !joinInfo.open ? '🔒 LOBBY CLOSED' : 'JOIN SERVER ➔'}
                   </button>
                 </div>
               </div>
