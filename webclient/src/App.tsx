@@ -18,6 +18,7 @@ export default function App() {
   const [queryResult, setQueryResult] = useState<any>(null);
   const [onlineCount, setOnlineCount] = useState(1);
   const [serverStats, setServerStats] = useState<any>(null);
+  const [showDeathScreen, setShowDeathScreen] = useState(false);
   const [ws, setWs] = useState<WebSocket | null>(null);
   const [gameState, setGameState] = useState<any>(null);
   const [myId, setMyId] = useState<string | null>(null);
@@ -62,9 +63,11 @@ export default function App() {
         case "player_joined":
           setMessages((m) => [...m, `⚡ ${msg.player_name.split('|')[0]} joined!`]);
           break;
-        case "player_left":
-          setMessages((m) => [...m, `👋 Player ${(msg.player_id || "?").slice(0, 4)} left.`]);
+        case "player_left": {
+          const leftName = msg.player_name ? msg.player_name.split('|')[0] : `Player ${(msg.player_id || "?").slice(0, 4)}`;
+          setMessages((m) => [...m, `👋 ${leftName} left.`]);
           break;
+        }
         case "chat":
           setMessages((m) => [...m, `${msg.sender.split('|')[0]}: ${msg.text}`]);
           break;
@@ -81,6 +84,19 @@ export default function App() {
           if (msg.player_id !== myIdRef.current) {
             setMessages((m) => [...m, `⚔ ${(msg.player_id || "?").slice(0, 4)} cast ${msg.spell}`]);
             setAttacks((a) => ({ ...a, [msg.player_id]: Date.now() }));
+          }
+          break;
+        case "player_died":
+          if (msg.player_id === myIdRef.current) {
+            setShowDeathScreen(true);
+          } else {
+            const diedName = msg.player_name ? msg.player_name.split('|')[0] : `Player ${(msg.player_id || "?").slice(0, 4)}`;
+            setMessages((m) => [...m, `💀 ${diedName} died!`]);
+          }
+          break;
+        case "player_respawned":
+          if (msg.player_id === myIdRef.current) {
+            setShowDeathScreen(false);
           }
           break;
         case "query_result":
@@ -601,7 +617,7 @@ export default function App() {
                   m.startsWith("⟳") ? "bg-[#fb923c]/20 text-[#fdba74] border border-[#fb923c]/30" :
                   "bg-[#523315] text-[#fde6b3] shadow-inner"
                 }`}>
-                {m.replace(/^[✅❌🔍📊⚡👋⚔⟳]\s*/, "")}
+                {m.replace(/^[✅❌🔍📊⚡👋⚔⟳]\s*/u, "")}
               </div>
             ))}
             <div ref={chatEndRef} />
@@ -741,6 +757,29 @@ export default function App() {
                 QUIT
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── DEATH OVERLAY ──────────────────────────────────────── */}
+      {showDeathScreen && (
+        <div className="absolute inset-0 z-[60] flex flex-col items-center justify-center pointer-events-none">
+          <div className="absolute inset-0 bg-red-950/70 animate-[fadeIn_0.3s_ease-out]" />
+          <div className="relative flex flex-col items-center gap-4">
+            <p
+              className="text-[#ff2222] font-pixelify text-8xl md:text-9xl tracking-widest drop-shadow-[0_0_40px_rgba(255,34,34,0.9)] animate-[deathPulse_0.6s_ease-in-out_infinite_alternate]"
+              style={{ textShadow: '0 0 60px #ff0000, 0 0 120px #ff0000' }}
+            >
+              OOF
+            </p>
+            <p
+              className="text-[#ff6666] font-pixelify text-4xl md:text-5xl tracking-widest drop-shadow-[0_0_20px_rgba(255,34,34,0.8)] animate-[deathPulse_0.6s_ease-in-out_0.15s_infinite_alternate]"
+            >
+              YOU DIED!
+            </p>
+            <p className="text-[#fca5a5] font-bold text-lg mt-4 animate-pulse tracking-widest">
+              Respawning in 3 seconds...
+            </p>
           </div>
         </div>
       )}
