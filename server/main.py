@@ -268,5 +268,5 @@ async def websocket_endpoint(ws: WebSocket):
         if player:
             await state.remove_player(player.id)
             await bus.disconnect(player.id)
-            await bus.enqueue({"type": "player_left", "player_id": player.id})
+            await bus.enqueue({"type": "player_left", "player_id": player.id, "player_name": player.name})
             print(f"[Server] {player.name} disconnected. | Players online: {bus.player_count}")
