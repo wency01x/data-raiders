@@ -677,7 +677,7 @@ export default function App() {
         {/* Mission Objective */}
         <div className="bg-[#784f2b] border-[4px] border-[#523315] rounded-xl p-3 shadow-inner shrink-0">
           <h2 className="text-sm font-black text-[#ffdb7a] tracking-wider mb-2 flex items-center gap-1.5 drop-shadow-sm">
-            <span>📜</span> MISSION OBJECTIVE
+            <span></span> MISSION OBJECTIVE
           </h2>
           <p className="text-sm font-bold text-white bg-[#523315] border-2 border-[#3e240f] rounded-lg px-3 py-2 shadow-inner">
             {objective || "Loading..."}
