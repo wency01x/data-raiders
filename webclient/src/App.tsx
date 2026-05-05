@@ -3,14 +3,20 @@ import GameCanvas from "./GameCanvas";
 import "./index.css";
 
 export default function App() {
-  type ViewState = 'TITLE' | 'LOADING' | 'GAME';
+  type ViewState = 'TITLE' | 'LOBBY' | 'LOADING' | 'GAME';
   const [view, setView] = useState<ViewState>('TITLE');
   const [showSettings, setShowSettings] = useState(false);
-  const [showLobby, setShowLobby] = useState(false);
   const [showHowToPlay, setShowHowToPlay] = useState(false);
   const [showQuitConfirm, setShowQuitConfirm] = useState(false);
   const [useCRT, setUseCRT] = useState(false);
   const [tutorialStep, setTutorialStep] = useState(0);
+
+  // ── Lobby / server-browser state ─────────────────────────────────────────
+  const [serverHost, setServerHost] = useState(() => window.location.hostname);
+  const [lobbyInfo, setLobbyInfo] = useState<any>(null);
+  const [isPinging, setIsPinging] = useState(false);
+  const [pingError, setPingError] = useState('');
+  const [lobbyMode, setLobbyMode] = useState<'create' | 'join'>('create');
   
   const [messages, setMessages] = useState<string[]>([]);
   const [inputVal, setInputVal] = useState("");
@@ -41,7 +47,7 @@ export default function App() {
     if (view !== 'GAME') return;
     const loc = window.location;
     const protocol = loc.protocol === "https:" ? "wss:" : "ws:";
-    const url = `${protocol}//${loc.hostname}:8000/ws`;
+    const url = `${protocol}//${serverHost}:8000/ws`;
     const socket = new WebSocket(url);
 
     socket.onopen = () => {
@@ -112,26 +118,43 @@ export default function App() {
 
     socket.onclose = () => setWs(null);
     return () => { socket.close(); };
-  }, [playerName, playerClass, view, gameMode]);
+  }, [playerName, playerClass, view, gameMode, serverHost]);
 
+  const pingServer = async (host?: string) => {
+    const target = host ?? serverHost;
+    setIsPinging(true);
+    setPingError('');
+    try {
+      const protocol = window.location.protocol;
+      const res = await fetch(`${protocol}//${target}:8000/lobby`);
+      if (!res.ok) throw new Error('bad response');
+      setLobbyInfo(await res.json());
+    } catch {
+      setPingError('Could not reach server at this address.');
+      setLobbyInfo(null);
+    } finally {
+      setIsPinging(false);
+    }
+  };
+
+  // Auto-ping when entering the lobby view
+  useEffect(() => {
+    if (view === 'LOBBY') pingServer();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view]);
+
+  // Poll /stats endpoint for Server Stats widget
   useEffect(() => {
     if (view !== 'GAME') return;
-    const pollStats = async () => {
-      try {
-        const loc = window.location;
-        const protocol = loc.protocol === "https:" ? "https:" : "http:";
-        const url = `${protocol}//${loc.hostname}:8000/stats`;
-        const res = await fetch(url);
-        if (res.ok) {
-          const data = await res.json();
-          setServerStats(data);
-        }
-      } catch (err) {
-        // silently fail if server is down or unreachable
-      }
+    const statsUrl = `${window.location.protocol}//${serverHost}:8000/stats`;
+    const fetchStats = () => {
+      fetch(statsUrl)
+        .then(r => r.json())
+        .then(setServerStats)
+        .catch(() => {});
     };
-    pollStats();
-    const iv = setInterval(pollStats, 2000);
+    fetchStats();
+    const iv = setInterval(fetchStats, 2000);
     return () => clearInterval(iv);
   }, [view]);
 
@@ -143,22 +166,6 @@ export default function App() {
       return () => clearInterval(iv);
     }
   }, [view, gameMode, speedrunStart]);
-
-  // Poll /stats endpoint for Server Stats widget
-  useEffect(() => {
-    if (view !== 'GAME') return;
-    const loc = window.location;
-    const statsUrl = `${loc.protocol}//${loc.hostname}:8000/stats`;
-    const fetchStats = () => {
-      fetch(statsUrl)
-        .then(r => r.json())
-        .then(setServerStats)
-        .catch(() => {});
-    };
-    fetchStats();
-    const iv = setInterval(fetchStats, 2000);
-    return () => clearInterval(iv);
-  }, [view]);
 
   const formatTime = (ms: number) => {
     const totalSeconds = Math.floor(ms / 1000);
@@ -222,7 +229,7 @@ export default function App() {
           
           <div className="flex flex-col gap-4 w-72 items-center">
             <button 
-              onClick={() => setShowLobby(true)}
+              onClick={() => setView('LOBBY')}
               className="w-full bg-[#d97706] hover:bg-[#b45309] active:bg-[#92400e] text-[#fde6b3] border-b-[6px] border-[#92400e] active:border-b-0 active:translate-y-[6px] font-pixelify tracking-widest px-6 py-4 rounded-xl text-3xl transition-all shadow-lg"
             >
               START GAME
@@ -313,63 +320,6 @@ export default function App() {
           </div>
         )}
 
-        {showLobby && (
-          <div className="absolute inset-0 bg-black/80 flex items-center justify-center z-50">
-            <div className="bg-[#784f2b] border-[4px] border-[#523315] rounded-2xl p-6 w-80 shadow-2xl flex flex-col gap-5 transform transition-all scale-100">
-              <h2 className="text-3xl font-pixelify text-[#ffdb7a] tracking-wider text-center drop-shadow-md">LOBBY SETUP</h2>
-              <div className="bg-[#5c3e21] p-4 rounded-xl border-2 border-[#3e240f] flex flex-col gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-[#fde6b3] mb-1 tracking-wider">PLAYER NAME</label>
-                  <input 
-                    type="text" 
-                    value={playerName} 
-                    onChange={(e) => setPlayerName(e.target.value)}
-                    maxLength={12}
-                    className="w-full bg-[#2e1d0d] border-[3px] border-[#1e1208] rounded px-3 py-2 text-sm font-mono text-[#4ade80] focus:outline-none focus:border-[#d97706] shadow-inner"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-[#fde6b3] mb-1 tracking-wider">GAME MODE</label>
-                  <select 
-                    value={gameMode}
-                    onChange={(e) => setGameMode(e.target.value)}
-                    className="w-full bg-[#2e1d0d] border-[3px] border-[#1e1208] rounded px-3 py-2 text-sm font-bold text-[#facc15] focus:outline-none focus:border-[#d97706] shadow-inner cursor-pointer"
-                  >
-                    <option value="Standard">Multiplayer Dungeon</option>
-                    <option value="Speedrun">Speedrun Mode</option>
-                    <option value="SinglePlayer" disabled>Single Player Sandbox (Soon)</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-[#fde6b3] mb-1 tracking-wider">CHARACTER CLASS</label>
-                  <select 
-                    value={playerClass}
-                    onChange={(e) => setPlayerClass(e.target.value)}
-                    className="w-full bg-[#2e1d0d] border-[3px] border-[#1e1208] rounded px-3 py-2 text-sm font-bold text-[#facc15] focus:outline-none focus:border-[#d97706] shadow-inner cursor-pointer"
-                  >
-                    <option value="Archer">Archer</option>
-                    <option value="Swordsman">Swordsman</option>
-                    <option value="Wizard">Wizard</option>
-                  </select>
-                </div>
-              </div>
-              <div className="flex gap-3 mt-2">
-                <button 
-                  onClick={() => setShowLobby(false)}
-                  className="flex-1 bg-[#5c3e21] hover:bg-[#3e240f] text-[#d4b483] border-b-[4px] border-[#3e240f] active:border-b-0 active:translate-y-[4px] font-bold py-3 rounded-lg transition-all text-sm"
-                >
-                  CANCEL
-                </button>
-                <button 
-                  onClick={() => { setShowLobby(false); setView('LOADING'); }}
-                  className="flex-1 bg-[#4ade80] hover:bg-[#22c55e] active:bg-[#16a34a] text-[#064e3b] border-b-[4px] border-[#16a34a] active:border-b-0 active:translate-y-[4px] font-bold py-3 rounded-lg transition-all text-sm shadow-[0_0_10px_rgba(74,222,128,0.5)]"
-                >
-                  JOIN SERVER
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
 
         {showSettings && (
           <div className="absolute inset-0 bg-black/80 flex items-center justify-center z-50">
@@ -404,6 +354,200 @@ export default function App() {
             </div>
           </div>
         )}
+      </div>
+    );
+  }
+
+  if (view === 'LOBBY') {
+    const uptime = lobbyInfo ? (() => {
+      const s = lobbyInfo.uptime_seconds;
+      return `${Math.floor(s / 60)}m ${s % 60}s`;
+    })() : null;
+
+    // Shared player setup block
+    const PlayerSetup = (
+      <div className="bg-[#784f2b] border-[3px] border-[#523315] rounded-xl p-4 flex flex-col gap-3">
+        <h2 className="text-xs font-black text-[#ffdb7a] tracking-widest">⚔️ PLAYER SETUP</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div>
+            <label className="block text-[10px] font-bold text-[#fde6b3] mb-1 tracking-wider">PLAYER NAME</label>
+            <input type="text" value={playerName} onChange={(e) => setPlayerName(e.target.value)} maxLength={12}
+              className="w-full bg-[#2e1d0d] border-[3px] border-[#1e1208] rounded px-3 py-2 text-sm font-mono text-[#4ade80] focus:outline-none focus:border-[#d97706] shadow-inner" />
+          </div>
+          <div>
+            <label className="block text-[10px] font-bold text-[#fde6b3] mb-1 tracking-wider">CHARACTER CLASS</label>
+            <select value={playerClass} onChange={(e) => setPlayerClass(e.target.value)}
+              className="w-full bg-[#2e1d0d] border-[3px] border-[#1e1208] rounded px-3 py-2 text-sm font-bold text-[#facc15] focus:outline-none focus:border-[#d97706] shadow-inner cursor-pointer">
+              <option value="Archer">🏹 Archer</option>
+              <option value="Swordsman">⚔️ Swordsman</option>
+              <option value="Wizard">🧙 Wizard</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-[10px] font-bold text-[#fde6b3] mb-1 tracking-wider">GAME MODE</label>
+            <select value={gameMode} onChange={(e) => setGameMode(e.target.value)}
+              className="w-full bg-[#2e1d0d] border-[3px] border-[#1e1208] rounded px-3 py-2 text-sm font-bold text-[#facc15] focus:outline-none focus:border-[#d97706] shadow-inner cursor-pointer">
+              <option value="Standard">⚔️ Multiplayer Dungeon</option>
+              <option value="Speedrun">⏱ Speedrun Mode</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    );
+
+    return (
+      <div className={`h-full w-full bg-scrolling-grid flex flex-col items-center justify-center font-sans relative overflow-hidden ${useCRT ? 'crt' : ''}`}>
+        <div className="z-10 w-full max-w-2xl px-4 md:px-8 flex flex-col gap-5">
+
+          {/* Title */}
+          <div className="text-center">
+            <h1 className="text-5xl font-pixelify text-[#ffdb7a] tracking-widest drop-shadow-[0_3px_15px_rgba(255,219,122,0.7)]">
+              SERVER LOBBY
+            </h1>
+            <p className="text-[#d4b483] font-semibold text-sm mt-1 tracking-wider">Host a game or join a friend&apos;s server</p>
+          </div>
+
+          {/* Mode Tab Switcher */}
+          <div className="flex gap-0 bg-[#2e1d0d] border-[4px] border-[#1e1208] rounded-2xl p-1.5">
+            <button
+              onClick={() => { setLobbyMode('create'); setServerHost(window.location.hostname); setLobbyInfo(null); pingServer(window.location.hostname); }}
+              className={`flex-1 py-3 rounded-xl font-pixelify tracking-widest text-lg transition-all ${
+                lobbyMode === 'create'
+                  ? 'bg-[#4ade80] text-[#064e3b] shadow-[0_0_15px_rgba(74,222,128,0.5)] border-b-[4px] border-[#16a34a]'
+                  : 'text-[#6b4c2a] hover:text-[#d4b483]'
+              }`}
+            >
+              🏰 CREATE LOBBY
+            </button>
+            <button
+              onClick={() => { setLobbyMode('join'); setLobbyInfo(null); setPingError(''); }}
+              className={`flex-1 py-3 rounded-xl font-pixelify tracking-widest text-lg transition-all ${
+                lobbyMode === 'join'
+                  ? 'bg-[#38bdf8] text-[#0c4a6e] shadow-[0_0_15px_rgba(56,189,248,0.5)] border-b-[4px] border-[#0369a1]'
+                  : 'text-[#6b4c2a] hover:text-[#d4b483]'
+              }`}
+            >
+              🔗 JOIN SERVER
+            </button>
+          </div>
+
+          {/* Main board */}
+          <div className="bg-[#5c3e21] border-[6px] border-[#3e240f] rounded-2xl p-5 shadow-[inset_0_0_20px_rgba(0,0,0,0.5),0_10px_30px_rgba(0,0,0,0.7)] flex flex-col gap-4">
+
+            {lobbyMode === 'create' ? (
+              /* ─── CREATE LOBBY mode ─── */
+              <div className="flex flex-col gap-4">
+                <div className="bg-[#3e240f] border-[3px] border-[#2e1d0d] rounded-xl p-4 flex flex-col gap-3">
+                  <h2 className="text-xs font-black text-[#4ade80] tracking-widest flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-[#4ade80] shadow-[0_0_8px_rgba(74,222,128,0.8)] animate-pulse" />
+                    YOUR SERVER IS READY
+                  </h2>
+                  {isPinging ? (
+                    <p className="text-xs text-[#d4b483] italic text-center animate-pulse">Detecting your server IP...</p>
+                  ) : lobbyInfo ? (
+                    <>
+                      <div className="text-center">
+                        <p className="text-[10px] text-[#d4b483] mb-1 tracking-wider font-semibold">SHARE THIS IP WITH YOUR FRIENDS</p>
+                        <div className="font-mono text-[#ffdb7a] text-2xl font-black bg-[#1e1208] rounded-lg py-4 px-4 border-2 border-[#2e1d0d] shadow-inner tracking-widest select-all cursor-text">
+                          {lobbyInfo.server_ip}
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 text-xs font-mono text-center">
+                        <div className="bg-[#2e1d0d] rounded-lg p-2 border border-[#1e1208]">
+                          <p className="text-[#86efac] text-[10px] mb-0.5">PORT</p>
+                          <p className="text-[#facc15] font-black">8000</p>
+                        </div>
+                        <div className="bg-[#2e1d0d] rounded-lg p-2 border border-[#1e1208]">
+                          <p className="text-[#86efac] text-[10px] mb-0.5">PLAYERS</p>
+                          <p className="text-[#fde6b3] font-black">{lobbyInfo.players_online}</p>
+                        </div>
+                        <div className="bg-[#2e1d0d] rounded-lg p-2 border border-[#1e1208]">
+                          <p className="text-[#86efac] text-[10px] mb-0.5">UPTIME</p>
+                          <p className="text-[#fde6b3] font-black">{uptime}</p>
+                        </div>
+                      </div>
+                      <p className="text-[10px] text-[#d4b483] italic text-center">💡 Make sure your friends are on the same network and enter your IP in the &quot;Join Server&quot; tab.</p>
+                    </>
+                  ) : (
+                    <div className="text-center py-2">
+                      <p className="text-xs text-[#fca5a5] font-mono">Could not detect local server.</p>
+                      <p className="text-[10px] text-[#d4b483] mt-1">Make sure <code className="bg-[#1e1208] px-1 rounded">python3 runserver.py</code> is running.</p>
+                      <button onClick={() => pingServer(window.location.hostname)} className="mt-3 text-xs bg-[#3e240f] hover:bg-[#523315] text-[#d4b483] px-4 py-1.5 rounded-lg border border-[#2e1d0d] transition-colors">
+                        Retry
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {PlayerSetup}
+
+                <div className="flex gap-4">
+                  <button onClick={() => setView('TITLE')}
+                    className="flex-1 bg-[#5c3e21] hover:bg-[#3e240f] text-[#d4b483] border-b-[4px] border-[#3e240f] active:border-b-0 active:translate-y-[4px] font-pixelify tracking-wider px-6 py-4 rounded-xl text-xl transition-all">
+                    ← BACK
+                  </button>
+                  <button onClick={() => setView('LOADING')} disabled={!lobbyInfo}
+                    className="flex-grow-[2] bg-[#4ade80] hover:bg-[#22c55e] active:bg-[#16a34a] disabled:bg-[#3e240f] disabled:text-[#6b4c2a] disabled:cursor-not-allowed text-[#064e3b] border-b-[4px] border-[#16a34a] active:border-b-0 active:translate-y-[4px] font-pixelify tracking-widest px-8 py-4 rounded-xl text-xl transition-all shadow-[0_0_20px_rgba(74,222,128,0.4)]">
+                    {lobbyInfo ? 'START AS HOST ➔' : 'SERVER NOT FOUND'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              /* ─── JOIN SERVER mode ─── */
+              <div className="flex flex-col gap-4">
+                <div className="bg-[#3e240f] border-[3px] border-[#2e1d0d] rounded-xl p-4 flex flex-col gap-3">
+                  <h2 className="text-xs font-black text-[#38bdf8] tracking-widest">🔗 ENTER SERVER ADDRESS</h2>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={serverHost}
+                      onChange={(e) => setServerHost(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && pingServer(serverHost)}
+                      placeholder="192.168.x.x"
+                      className="flex-1 min-w-0 bg-[#2e1d0d] border-[3px] border-[#1e1208] rounded px-3 py-2 text-sm font-mono text-[#4ade80] placeholder-[#784f2b] focus:outline-none focus:border-[#38bdf8] transition-colors shadow-inner"
+                    />
+                    <button onClick={() => pingServer(serverHost)} disabled={isPinging}
+                      className="bg-[#0369a1] hover:bg-[#0284c7] active:bg-[#075985] text-white font-black px-4 py-2 rounded-lg text-xs transition-colors disabled:opacity-50 border-b-[3px] border-[#075985] active:border-b-0 active:translate-y-[3px]">
+                      {isPinging ? '⏳...' : 'PING'}
+                    </button>
+                  </div>
+                  {pingError && <p className="text-xs text-[#fca5a5] font-mono">{pingError}</p>}
+                  {!lobbyInfo && !isPinging && !pingError && (
+                    <p className="text-[10px] text-[#d4b483] italic">Ask your friend for their IP from the &quot;Create Lobby&quot; tab, then enter it here and press PING.</p>
+                  )}
+                  {lobbyInfo && (
+                    <div className="bg-[#1e1208] rounded-lg p-3 border-2 border-[#38bdf8]/30 grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs font-mono">
+                      <span className="text-[#86efac]">Status</span>
+                      <span className="text-[#4ade80] font-bold flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#4ade80] animate-pulse inline-block" />
+                        Online
+                      </span>
+                      <span className="text-[#86efac]">Server IP</span>
+                      <span className="text-[#fde6b3] font-bold">{lobbyInfo.server_ip}</span>
+                      <span className="text-[#86efac]">Players</span>
+                      <span className="text-[#fde6b3] font-bold">{lobbyInfo.players_online} online</span>
+                      <span className="text-[#86efac]">Room Progress</span>
+                      <span className="text-[#fde6b3] font-bold">{lobbyInfo.room_number} / 5</span>
+                    </div>
+                  )}
+                </div>
+
+                {PlayerSetup}
+
+                <div className="flex gap-4">
+                  <button onClick={() => setView('TITLE')}
+                    className="flex-1 bg-[#5c3e21] hover:bg-[#3e240f] text-[#d4b483] border-b-[4px] border-[#3e240f] active:border-b-0 active:translate-y-[4px] font-pixelify tracking-wider px-6 py-4 rounded-xl text-xl transition-all">
+                    ← BACK
+                  </button>
+                  <button onClick={() => setView('LOADING')} disabled={!lobbyInfo}
+                    className="flex-grow-[2] bg-[#d97706] hover:bg-[#b45309] active:bg-[#92400e] disabled:bg-[#5c3e21] disabled:text-[#6b4c2a] disabled:border-[#3e240f] disabled:cursor-not-allowed text-[#fde6b3] border-b-[4px] border-[#92400e] active:border-b-0 active:translate-y-[4px] font-pixelify tracking-widest px-8 py-4 rounded-xl text-xl transition-all shadow-[0_0_20px_rgba(217,119,6,0.4)]">
+                    {lobbyInfo ? 'JOIN SERVER ➔' : 'PING FIRST...'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     );
   }
