@@ -17,6 +17,7 @@ from server.spell_engine import cast_spell
 from shared.constants import TICK_RATE
 
 _start_time = time.time()
+_lobby_open: bool = False  # Host must explicitly open the lobby before anyone can join
 
 
 @asynccontextmanager
@@ -37,7 +38,7 @@ app = FastAPI(title="Data Raiders", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_methods=["GET"],
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
 
@@ -127,8 +128,8 @@ def _get_local_ip() -> str:
 @app.get("/lobby")
 async def get_lobby():
     """
-    Returns lobby-level server info so clients can display it in the
-    server browser / lobby UI before committing to a WebSocket connection.
+    Returns lobby-level server info. Clients poll this before connecting.
+    'open' indicates whether the host has opened the lobby for players.
     """
     return JSONResponse({
         "server_ip": _get_local_ip(),
@@ -136,8 +137,27 @@ async def get_lobby():
         "players_online": bus.player_count,
         "room_number": state.room_number,
         "uptime_seconds": int(time.time() - _start_time),
-        "status": "online",
+        "open": _lobby_open,
+        "status": "open" if _lobby_open else "closed",
     })
+
+
+@app.post("/lobby/open")
+async def open_lobby():
+    """Host calls this to open the lobby so other players can join."""
+    global _lobby_open
+    _lobby_open = True
+    print("[Server] Lobby OPENED by host.")
+    return JSONResponse({"open": True, "status": "opened"})
+
+
+@app.post("/lobby/close")
+async def close_lobby():
+    """Host calls this to close the lobby (no new players can join)."""
+    global _lobby_open
+    _lobby_open = False
+    print("[Server] Lobby CLOSED by host.")
+    return JSONResponse({"open": False, "status": "closed"})
 
 
 # ── WebSocket endpoint ────────────────────────────────────────────────────────
@@ -145,6 +165,16 @@ async def get_lobby():
 @app.websocket("/ws")
 async def websocket_endpoint(ws: WebSocket):
     await ws.accept()
+
+    # Gate: reject connections when the host hasn't opened the lobby yet
+    if not _lobby_open:
+        await ws.send_json({
+            "type": "lobby_closed",
+            "message": "The host hasn't opened the lobby yet. Please wait.",
+        })
+        await ws.close()
+        return
+
     player = None
 
     try:
