@@ -3,9 +3,11 @@ import json
 import re
 import time
 import os
+import socket
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
 from server.db import init_db, get_connection
@@ -30,6 +32,14 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Data Raiders", lifespan=lifespan)
+
+# Allow all LAN clients to fetch HTTP endpoints (lobby info, stats) from a browser
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["GET"],
+    allow_headers=["*"],
+)
 
 # ── Serve built Vite frontend from /client ────────────────────────────────────
 _dist_dir = os.path.join(os.path.dirname(__file__), "..", "webclient", "dist")
@@ -98,6 +108,35 @@ async def get_stats():
         "events_processed": bus.events_processed,
         "current_room": state.current_room,
         "room_number": state.room_number,
+    })
+
+
+def _get_local_ip() -> str:
+    """Detect the machine's LAN IP address for display in the lobby."""
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.settimeout(0)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception:
+        return "127.0.0.1"
+
+
+@app.get("/lobby")
+async def get_lobby():
+    """
+    Returns lobby-level server info so clients can display it in the
+    server browser / lobby UI before committing to a WebSocket connection.
+    """
+    return JSONResponse({
+        "server_ip": _get_local_ip(),
+        "port": 8000,
+        "players_online": bus.player_count,
+        "room_number": state.room_number,
+        "uptime_seconds": int(time.time() - _start_time),
+        "status": "online",
     })
 
 
