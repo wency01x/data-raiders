@@ -1,9 +1,62 @@
 import asyncio
 import functools
+import time
 from server.db import get_connection
 from server.game_state import state
+from server.event_bus import bus
 
 _db_lock = asyncio.Lock()
+
+# ── Per-player mistake tracking / rate limiting ───────────────────────────────
+_MISTAKE_LIMIT   = 3          # consecutive wrong casts before roast + cooldown
+_COOLDOWN_SECS   = 5.0        # how long the cooldown lasts (seconds)
+_mistake_streak: dict[str, int]   = {}   # player_id -> consecutive wrong casts
+_cooldown_until:  dict[str, float] = {}   # player_id -> epoch timestamp
+
+ROAST_MESSAGES = [
+    "Are you not that dumb right? XD",
+    "Bro please read the objective 💀",
+    "Skill issue detected. Cooling down...",
+    "3 wrong casts? Taking a breather for ya XD",
+]
+
+
+def _record_mistake(player_id: str) -> str | None:
+    """
+    Increment this player's consecutive mistake counter.
+    Returns a roast string if they just hit the limit (and sets a cooldown),
+    otherwise returns None.
+    """
+    streak = _mistake_streak.get(player_id, 0) + 1
+    _mistake_streak[player_id] = streak
+    if streak >= _MISTAKE_LIMIT:
+        _cooldown_until[player_id] = time.monotonic() + _COOLDOWN_SECS
+        _mistake_streak[player_id] = 0   # reset so the next burst triggers again
+        import random
+        return random.choice(ROAST_MESSAGES)
+    return None
+
+
+def _record_success(player_id: str):
+    """Reset the mistake streak on any successful cast."""
+    _mistake_streak.pop(player_id, None)
+
+
+async def _apply_player_damage(player_id: str, amount: int = 1):
+    """Damage a player and, if they just died, broadcast the event and schedule a respawn."""
+    died = await state.damage_player(player_id, amount)
+    if died:
+        async with state.lock:
+            p = state.players.get(player_id)
+            name = p.name if p else player_id
+        await bus.enqueue({"type": "player_died", "player_id": player_id, "player_name": name})
+        asyncio.create_task(_respawn_after(player_id, delay=3.0))
+
+
+async def _respawn_after(player_id: str, delay: float):
+    await asyncio.sleep(delay)
+    await state.respawn_player(player_id)
+    await bus.enqueue({"type": "player_respawned", "player_id": player_id})
 
 
 # ── Thread-pool helper ────────────────────────────────────────────────────────
@@ -79,20 +132,44 @@ ROOM_CHECKERS = {
 async def cast_spell(player_id: str, spell: str, target_id: int | None) -> dict:
     spell = spell.upper()
 
+    # ── Rate-limit check ──────────────────────────────────────────────────
+    until = _cooldown_until.get(player_id, 0.0)
+    remaining = until - time.monotonic()
+    if remaining > 0:
+        return {
+            "success": False,
+            "message": f"🔕 Cooldown! Calm down and think for {remaining:.1f}s more... XD",
+        }
+
     if spell not in state.allowed_spells and spell != "SELECT":
         return {"success": False, "message": f"Spell {spell} not available in this room! Allowed: {', '.join(state.allowed_spells)}"}
 
     if spell == "SELECT":
-        return await _spell_select(player_id, target_id)
+        result = await _spell_select(player_id, target_id)
     elif spell == "DELETE":
-        return await _spell_delete(player_id, target_id)
+        result = await _spell_delete(player_id, target_id)
     elif spell == "INSERT":
-        return await _spell_insert(player_id)
+        result = await _spell_insert(player_id)
     elif spell == "UPDATE":
-        return await _spell_update(player_id, target_id)
+        result = await _spell_update(player_id, target_id)
     elif spell == "JOIN":
-        return await _spell_join()
-    return {"success": False, "message": f"Unknown spell: {spell}"}
+        result = await _spell_join()
+    else:
+        return {"success": False, "message": f"Unknown spell: {spell}"}
+
+    # ── Update mistake streak ─────────────────────────────────────────────
+    if result.get("success"):
+        _record_success(player_id)
+    else:
+        # Only roast on wrong-target failures (messages containing "-1 HP" or "WRONG" or "FK CONSTRAINT")
+        msg = result.get("message", "")
+        if any(k in msg for k in ("-1 HP", "WRONG", "FK CONSTRAINT", "Phase")):
+            roast = _record_mistake(player_id)
+            if roast:
+                result = dict(result)
+                result["message"] = result["message"] + f"  \u2014  {roast}"
+
+    return result
 
 
 async def _spell_select(player_id: str, target_id: int | None) -> dict:
@@ -154,17 +231,16 @@ async def _spell_delete(player_id: str, target_id: int | None) -> dict:
         blockers = [e for e in state.enemies.values() if e.alive and target_id in e.depends_on]
         if blockers:
             names = ", ".join(e.label for e in blockers)
-            p = state.players.get(player_id)
-            if p:
-                p.hp = max(0, p.hp - 1)
-            return {
-                "success": False,
-                "message": (
-                    f"FK CONSTRAINT VIOLATION! "
-                    f"{names} still reference{'s' if len(blockers)==1 else ''} "
-                    f"this row. Delete child rows first! (-1 HP)"
-                ),
-            }
+    if blockers:
+        await _apply_player_damage(player_id, 1)
+        return {
+            "success": False,
+            "message": (
+                f"FK CONSTRAINT VIOLATION! "
+                f"{names} still reference{'s' if len(blockers)==1 else ''} "
+                f"this row. Delete child rows first! (-1 HP)"
+            ),
+        }
 
     # ── Room objective check ──────────────────────────────────────────────
     async with state.lock:
@@ -174,11 +250,11 @@ async def _spell_delete(player_id: str, target_id: int | None) -> dict:
         checker = ROOM_CHECKERS.get(state.room_number)
         if checker:
             valid, reason = checker(enemy.extra, "DELETE")
-            if not valid:
-                p = state.players.get(player_id)
-                if p:
-                    p.hp = max(0, p.hp - 1)
-                return {"success": False, "message": reason}
+        else:
+            valid, reason = True, ""
+    if not valid:
+        await _apply_player_damage(player_id, 1)
+        return {"success": False, "message": reason}
 
     # ── DB write in thread pool ───────────────────────────────────────────
     async with _db_lock:
@@ -245,11 +321,11 @@ async def _spell_update(player_id: str, target_id: int | None) -> dict:
         checker = ROOM_CHECKERS.get(state.room_number)
         if checker:
             valid, reason = checker(enemy.extra, "UPDATE")
-            if not valid:
-                p = state.players.get(player_id)
-                if p:
-                    p.hp = max(0, p.hp - 1)
-                return {"success": False, "message": reason}
+        else:
+            valid, reason = True, ""
+    if not valid:
+        await _apply_player_damage(player_id, 1)
+        return {"success": False, "message": reason}
 
     # ── DB write in thread pool ───────────────────────────────────────────
     async with _db_lock:
