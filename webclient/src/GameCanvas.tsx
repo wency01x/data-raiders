@@ -711,7 +711,7 @@ export default function GameCanvas({ ws, gameState, myId, attacks, onRequestQuit
         className="block w-full h-full outline-none"
         style={{ imageRendering: 'pixelated' }}
       />
-      <div className="absolute top-4 left-4 flex flex-col gap-2 pointer-events-none">
+      <div className="absolute top-4 left-0 w-full flex flex-wrap justify-center gap-4 pointer-events-none px-4">
         {(gameState?.players || []).map((p: any) => {
           const isDead = p.lives !== undefined && p.lives <= 0;
           const livesCount = p.lives ?? 3;

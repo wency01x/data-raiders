@@ -367,6 +367,10 @@ async def websocket_endpoint(ws: WebSocket):
                                 for i, p in enumerate(state.players.values()):
                                     p.x = float((i + 1) * 2 * 56)
                                     p.y = float(2 * 56)
+                                    # Revive players if they died in the previous room
+                                    if p.lives <= 0:
+                                        p.lives = 3
+                                        p.hp = p.max_hp
                             state.game_phase = "JOURNEY_MAP"
                             await bus.enqueue({
                                 "type": "reset_ack",

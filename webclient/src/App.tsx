@@ -8,7 +8,6 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showHowToPlay, setShowHowToPlay] = useState(false);
   const [showQuitConfirm, setShowQuitConfirm] = useState(false);
-  const [showGameOver, setShowGameOver] = useState(false);
   const [useCRT, setUseCRT] = useState(false);
   const [tutorialStep, setTutorialStep] = useState(0);
   const [shouldConnect, setShouldConnect] = useState(false);
@@ -143,13 +142,7 @@ export default function App() {
           break;
         case "player_died":
           if (msg.player_id === myIdRef.current) {
-            if (msg.lives_left <= 0) {
-              setShowGameOver(true);
-              setTimeout(() => {
-                setShowGameOver(false);
-                setView('TITLE');
-              }, 4000);
-            } else {
+            if (msg.lives_left > 0) {
               setShowDeathScreen(true);
             }
           } else {
@@ -287,7 +280,6 @@ export default function App() {
 
   const roomName = gameState?.room ?? "—";
   const roomNum = gameState?.room_number ?? 1;
-  const brief = gameState?.brief ?? "";
   const objective = gameState?.objective ?? "";
   const hint = gameState?.hint ?? "";
   const allowedSpells = gameState?.allowed_spells ?? [];
@@ -1194,30 +1186,7 @@ export default function App() {
         </div>
       )}
 
-      {/* ── GAME OVER OVERLAY ──────────────────────────────────── */}
-      {showGameOver && (
-        <div className="absolute inset-0 z-[70] flex flex-col items-center justify-center pointer-events-none">
-          <div className="absolute inset-0 bg-black/90 animate-[fadeIn_0.5s_ease-out]" />
-          <div className="relative flex flex-col items-center gap-4">
-            <p
-              className="text-[#991b1b] font-pixelify text-8xl md:text-9xl tracking-widest drop-shadow-[0_0_40px_rgba(153,27,27,0.9)] animate-[bounce_0.5s_ease-out]"
-              style={{ textShadow: '0 0 60px #7f1d1d, 0 0 120px #7f1d1d' }}
-            >
-              GAME OVER
-            </p>
-            <p
-              className="text-[#fca5a5] font-pixelify text-3xl md:text-4xl tracking-widest mt-4 drop-shadow-[0_0_20px_rgba(252,165,165,0.8)]"
-            >
-              YOU LOST ALL YOUR HEARTS
-            </p>
-            <p className="text-[#d4b483] font-bold text-lg mt-8 animate-pulse tracking-widest">
-              Returning to start screen...
-            </p>
-          </div>
-        </div>
-      )}
-
-    </div>
+      </div>
     </div>
   );
 }
