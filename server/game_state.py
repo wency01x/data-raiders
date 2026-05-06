@@ -12,6 +12,7 @@ class Player:
     y: float
     hp: int = 5
     max_hp: int = 5
+    lives: int = 3
     color_idx: int = 0
     score: int = 0
 
@@ -20,6 +21,7 @@ class Player:
             "id": self.id, "name": self.name,
             "x": self.x,  "y": self.y,
             "hp": self.hp, "max_hp": self.max_hp,
+            "lives": self.lives,
             "color_idx": self.color_idx, "score": self.score,
         }
 
@@ -89,6 +91,7 @@ class GameState:
         self.room_hint:      str = ""
         self.room_number:    int = 1
         self.allowed_spells: list[str] = ["SELECT", "DELETE"]
+        self.game_phase: str = "LOBBY"
         self._color_counter = 0
 
     def next_color_idx(self) -> int:
@@ -215,6 +218,7 @@ class GameState:
             "allowed_spells": self.allowed_spells,
             "room_cleared":   self.is_room_cleared(),
             "targets_remaining": self.targets_remaining,
+            "game_phase":     self.game_phase,
         }
 
     @property

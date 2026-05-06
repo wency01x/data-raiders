@@ -43,15 +43,23 @@ def _record_success(player_id: str):
 
 
 async def _apply_player_damage(player_id: str, amount: int = 1):
-    """Damage a player and, if they just died, broadcast the event and schedule a respawn."""
+    """Damage a player and, if they just died, broadcast the event (no respawn)."""
     died = await state.damage_player(player_id, amount)
     if died:
         async with state.lock:
             p = state.players.get(player_id)
             name = p.name if p else player_id
-        await bus.enqueue({"type": "player_died", "player_id": player_id, "player_name": name})
-        asyncio.create_task(_respawn_after(player_id, delay=3.0))
-
+            player_count = len(state.players)
+            if p:
+                p.lives -= 1
+                lives_left = p.lives
+            else:
+                lives_left = 0
+        await bus.enqueue({"type": "player_died", "player_id": player_id, "player_name": name, "lives_left": lives_left})
+        
+        # If they have lives left or are playing alone, respawn them
+        if lives_left > 0 or player_count == 1:
+            asyncio.create_task(_respawn_after(player_id, delay=3.0))
 
 async def _respawn_after(player_id: str, delay: float):
     await asyncio.sleep(delay)

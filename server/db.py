@@ -143,13 +143,13 @@ def init_db():
             1, "employees_status", "enemies_room1", 1,
             # brief
             (
-                "ROOM 1 — SELECT RECON\n"
+                "LEVEL 1 — THE CORRUPTION SPREADS\n"
                 "Table: employees (id, name, status, dept)\n"
-                "Some records are CORRUPTED.\n"
-                "Use SELECT to identify them, then DELETE only the corrupted ones!"
+                "A digital plague is infecting our staff records!\n"
+                "Identify the 'CORRUPTED' ones with SELECT, then purge them with DELETE!"
             ),
             # objective
-            "Eliminate all the corrupted employee records.",
+            "Hunt down and eliminate all corrupted employee records before it's too late.",
             # schema_info
             json.dumps({
                 "table_name": "employees",
@@ -167,12 +167,12 @@ def init_db():
         (
             2, "employees_dept", "enemies_room2", 0,
             (
-                "ROOM 2 — DELETE WHERE\n"
+                "LEVEL 2 — INFESTATION ALERT\n"
                 "Table: employees_dept (id, name, dept, salary)\n"
-                "The BUGS department is infesting the database!\n"
-                "DELETE only employees from the 'BUGS' department."
+                "The notorious BUGS department has breached sector 2!\n"
+                "Show no mercy: DELETE every employee from the 'BUGS' department."
             ),
-            "Clear out all employees belonging to the BUGS department.",
+            "Clear out the entire BUGS department. Leave the good devs alone!",
             json.dumps({
                 "table_name": "employees_dept",
                 "columns": ["id", "name", "dept", "salary"],
@@ -187,12 +187,12 @@ def init_db():
         (
             3, "employees_salary", "enemies_room3", 0,
             (
-                "ROOM 3 — UPDATE SET\n"
+                "LEVEL 3 — PAYDAY HEIST\n"
                 "Table: employees_salary (id, name, role, salary)\n"
-                "The Devs are underpaid! Their salary should be doubled.\n"
-                "Use UPDATE on employees_salary WHERE role = 'Dev'."
+                "The Devs are staging a walkout! They demand better compensation.\n"
+                "Use UPDATE to double the salary for everyone with role = 'Dev'."
             ),
-            "Increase the salary of all Developers using the UPDATE spell.",
+            "Buff the Developers' salaries using the UPDATE spell to calm them down.",
             json.dumps({
                 "table_name": "employees_salary",
                 "columns": ["id", "name", "role", "salary"],
@@ -207,13 +207,12 @@ def init_db():
         (
             4, "employees_fk", "enemies_room4", 0,
             (
-                "ROOM 4 — FK CONSTRAINTS\n"
+                "LEVEL 4 — CHAIN OF COMMAND\n"
                 "Table: employees_fk (id, name, manager_id)\n"
-                "manager_id references another employee's id.\n"
-                "You must DELETE child rows BEFORE parent rows!\n"
-                "Delete in the correct order or suffer HP penalties."
+                "A hostile corporate takeover! manager_id relies on other IDs.\n"
+                "You must overthrow the hierarchy from the bottom up! DELETE children before parents."
             ),
-            "Remove the entire management chain from the bottom up.",
+            "Dismantle the management chain systematically from the lowest tier to the CEO.",
             json.dumps({
                 "table_name": "employees_fk",
                 "columns": ["id", "name", "manager_id"],
@@ -229,14 +228,13 @@ def init_db():
         (
             5, "sys_boss", "enemies_room5", 0,
             (
-                "ROOM 5 — FINAL BOSS\n"
+                "LEVEL 5 — THE BIG EVIL DATA\n"
                 "Table: sys_corrupted (id, name, weakness, phase)\n"
-                "The CORRUPT_INDEX boss has multiple phases!\n"
-                "Phase 1: Use SELECT to find its weakness.\n"
-                "Phase 2: Use UPDATE to exploit the weakness.\n"
-                "Phase 3: Use DELETE to finish it off!"
+                "A massive, terrifying anomaly has formed! You need teamwork to survive!\n"
+                "Phase 1: SELECT it to expose weakness. Phase 2: UPDATE to exploit it.\n"
+                "Phase 3: Spam DELETE with your team to bring its huge HP down!"
             ),
-            "Discover the boss's weakness, weaken its defenses, then destroy it.",
+            "Work together with your teammates to defeat the massive boss anomaly.",
             json.dumps({
                 "table_name": "sys_corrupted",
                 "columns": ["id", "name", "weakness", "phase"],
@@ -284,11 +282,11 @@ def init_db():
     c.executemany(
         "INSERT INTO enemies_room3 (label, hp, max_hp, tile_x, tile_y, name, role, salary) VALUES (?,?,?,?,?,?,?,?)",
         [
-            ("Leo",    4, 4,  4,  3, "Leo",    "Dev",     50000),
-            ("Mia",    4, 4,  9,  2, "Mia",    "QA",      55000),
-            ("Nick",   4, 4, 13,  5, "Nick",   "Dev",     48000),
-            ("Olivia", 4, 4,  3,  8, "Olivia", "Manager", 95000),
-            ("Paul",   4, 4,  8,  9, "Paul",   "Dev",     52000),
+            ("Leo",    6, 6,  4,  3, "Leo",    "Dev",     50000),
+            ("Mia",    6, 6,  9,  2, "Mia",    "QA",      55000),
+            ("Nick",   6, 6, 13,  5, "Nick",   "Dev",     48000),
+            ("Olivia", 6, 6,  3,  8, "Olivia", "Manager", 95000),
+            ("Paul",   6, 6,  8,  9, "Paul",   "Dev",     52000),
         ],
     )
 
@@ -298,11 +296,11 @@ def init_db():
     c.executemany(
         "INSERT INTO enemies_room4 (label, hp, max_hp, tile_x, tile_y, name, manager_id) VALUES (?,?,?,?,?,?,?)",
         [
-            ("CEO",      4, 4,  3,  3, "CEO",      0),    # id=1, no manager
-            ("Manager",  4, 4,  8,  2, "Manager",  1),    # id=2, reports to CEO
-            ("TeamLead", 4, 4, 12,  6, "TeamLead", 2),    # id=3, reports to Manager
-            ("Worker",   3, 3,  6,  9, "Worker",   3),    # id=4, reports to TeamLead
-            ("Intern",   3, 3, 13,  9, "Intern",   0),    # id=5, standalone
+            ("CEO",      7, 7,  3,  3, "CEO",      0),    # id=1, no manager
+            ("Manager",  7, 7,  8,  2, "Manager",  1),    # id=2, reports to CEO
+            ("TeamLead", 7, 7, 12,  6, "TeamLead", 2),    # id=3, reports to Manager
+            ("Worker",   5, 5,  6,  9, "Worker",   3),    # id=4, reports to TeamLead
+            ("Intern",   5, 5, 13,  9, "Intern",   0),    # id=5, standalone
         ],
     )
     # Set FK dependencies: parent is blocked until children are deleted
@@ -314,7 +312,7 @@ def init_db():
     c.executemany(
         "INSERT INTO enemies_room5 (label, hp, max_hp, tile_x, tile_y, name, weakness, phase) VALUES (?,?,?,?,?,?,?,?)",
         [
-            ("CORRUPT_INDEX", 12, 12, 7, 5, "CORRUPT_INDEX", "REINDEX", 1),
+            ("CORRUPT_INDEX", 100, 100, 7, 5, "CORRUPT_INDEX", "REINDEX", 1),
         ],
     )
 
@@ -324,13 +322,19 @@ def init_db():
         [
             (1,  2,  6, 10, "ROW_ID"),
             (1, 14,  3, 10, "STATUS"),
+            (1,  8,  5,  0, "health"),
             (2,  1,  8, 15, "DEPT"),
             (2, 14,  4, 15, "SALARY"),
+            (2,  7,  7,  0, "health"),
             (3,  2,  5, 20, "ROLE"),
             (3, 13,  8, 20, "BONUS"),
+            (3,  5,  5,  0, "health"),
             (4,  7,  5, 25, "FK_KEY"),
+            (4, 10,  2,  0, "health"),
             (5, 12,  3, 30, "INDEX"),
             (5,  3, 10, 30, "SCHEMA"),
+            (5,  2,  2,  0, "health"),
+            (5, 13, 10,  0, "health"),
         ],
     )
 

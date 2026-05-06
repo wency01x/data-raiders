@@ -358,7 +358,7 @@ export default function GameCanvas({ ws, gameState, myId, attacks, onRequestQuit
             const dist = Math.hypot(me.x + TILE / 2 - cx, me.y + TILE / 2 - cy);
             if (dist < TILE) {
               changingRoomRef.current = true;
-              currentWs.send(JSON.stringify({ type: "next_room" }));
+              currentWs.send(JSON.stringify({ type: "trigger_level_complete" }));
               setTimeout(() => { changingRoomRef.current = false; }, 3000);
             }
           }
@@ -368,16 +368,30 @@ export default function GameCanvas({ ws, gameState, myId, attacks, onRequestQuit
         for (const l of gs.loot || []) {
           if (l.collected) continue;
           const cx = l.x + TILE / 2, cy = l.y + TILE / 2;
-          ctx.beginPath(); ctx.arc(cx, cy, 16, 0, Math.PI * 2);
-          ctx.fillStyle = "rgba(16, 185, 129, 0.15)"; ctx.fill();
-          ctx.lineWidth = 2; ctx.strokeStyle = "#10b981"; ctx.stroke();
-          ctx.fillStyle = "#e2e8f0";
-          ctx.font = "bold 10px 'Segoe UI', sans-serif";
-          ctx.textAlign = "center";
-          ctx.fillText(l.label || "data", cx, l.y + 6);
-          ctx.fillStyle = "#10b981";
-          ctx.font = "bold 14px monospace";
-          ctx.fillText("{}", cx, cy + 6);
+          
+          if (l.label === "health") {
+            const pulseY = Math.sin(Date.now() / 200) * 4;
+            const pulseScale = 1 + Math.sin(Date.now() / 150) * 0.15;
+            ctx.save();
+            ctx.translate(cx, cy + pulseY);
+            ctx.scale(pulseScale, pulseScale);
+            ctx.font = "28px Arial";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText("❤️", 0, 0);
+            ctx.restore();
+          } else {
+            ctx.beginPath(); ctx.arc(cx, cy, 16, 0, Math.PI * 2);
+            ctx.fillStyle = "rgba(16, 185, 129, 0.15)"; ctx.fill();
+            ctx.lineWidth = 2; ctx.strokeStyle = "#10b981"; ctx.stroke();
+            ctx.fillStyle = "#e2e8f0";
+            ctx.font = "bold 10px 'Segoe UI', sans-serif";
+            ctx.textAlign = "center";
+            ctx.fillText(l.label || "data", cx, l.y + 6);
+            ctx.fillStyle = "#10b981";
+            ctx.font = "bold 14px monospace";
+            ctx.fillText("{}", cx, cy + 6);
+          }
         }
 
         /* ── ENEMIES ──────────────────────────────────────── */
@@ -398,9 +412,9 @@ export default function GameCanvas({ ws, gameState, myId, attacks, onRequestQuit
           const atkImg  = SLIME_SPRITES[`slime${slimeType}Atk`];
           const spriteImg = isBeingHit && atkImg ? atkImg : idleImg;
 
-          const spriteSize = TILE * 1.25;
+          const spriteSize = TILE * 2.25;
           const sdx = e.x + (TILE - spriteSize) / 2;
-          const sdy = e.y + (TILE - spriteSize) / 2 - 8;
+          const sdy = e.y + (TILE - spriteSize) / 2 - 16;
           const frameIdx = Math.floor(Date.now() / 120);
 
           const drawn = spriteImg ? drawSlimeFrame(ctx, spriteImg, frameIdx, sdx, sdy, spriteSize, spriteSize) : false;
@@ -457,6 +471,7 @@ export default function GameCanvas({ ws, gameState, myId, attacks, onRequestQuit
         /* ── PLAYERS ──────────────────────────────────────── */
         for (const p of gs.players || []) {
           const isMe = p.id === currentMyId;
+          const isDead = p.hp !== undefined && p.hp <= 0;
           const px = p.x + 3, py = p.y + 3;
           
           const cClass = getCharClass(p.name || "");
@@ -477,10 +492,10 @@ export default function GameCanvas({ ws, gameState, myId, attacks, onRequestQuit
               frame = Math.floor(Date.now() / 100) % frames; 
             }
 
-            const drawW = Math.round(TILE * 1.5);
+            const drawW = Math.round(TILE * 2.5);
             const drawH = drawW; 
             const dx = px - (drawW - TILE) / 2;
-            const dy = py - (drawH - TILE) / 2 - 12;
+            const dy = py - (drawH - TILE) / 2 - 18;
 
             const prevX = prevXRef.current[p.id];
             let facing = facingRef.current[p.id] || 1;
@@ -492,6 +507,9 @@ export default function GameCanvas({ ws, gameState, myId, attacks, onRequestQuit
             facingRef.current[p.id] = facing;
 
             ctx.save();
+            if (isDead) {
+              ctx.globalAlpha = 0.4;
+            }
             if (facing === -1) {
               ctx.translate(dx + drawW / 2, dy + drawH / 2);
               ctx.scale(-1, 1);
@@ -519,12 +537,12 @@ export default function GameCanvas({ ws, gameState, myId, attacks, onRequestQuit
           }
 
           // name + score
-          ctx.fillStyle = "#e2e8f0";
+          ctx.fillStyle = isDead ? "#ef4444" : "#e2e8f0";
           ctx.font = "bold 12px 'Segoe UI', sans-serif";
           ctx.textAlign = "center";
           const rawName = p.name || "?";
           const displayName = rawName.includes('|') ? rawName.split('|')[0] : rawName;
-          const tag = displayName.substring(0, 7) + (isMe ? " ★" : "");
+          const tag = displayName.substring(0, 7) + (isMe ? " ★" : "") + (isDead ? " 💀" : "");
           ctx.fillText(tag, p.x + TILE / 2, p.y - 3);
 
           // HP bar under player
@@ -681,16 +699,42 @@ export default function GameCanvas({ ws, gameState, myId, attacks, onRequestQuit
   };
 
   return (
-    <canvas
-      ref={canvasRef}
-      onMouseDown={handleMouseDown}
-      onMouseMove={handleMouseMove}
-      onMouseLeave={handleMouseLeave}
-      width={896}
-      height={722}
-      tabIndex={0}
-      className="block w-full h-full outline-none"
-      style={{ imageRendering: 'pixelated' }}
-    />
+    <div className="w-full h-full relative">
+      <canvas
+        ref={canvasRef}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseLeave={handleMouseLeave}
+        width={896}
+        height={722}
+        tabIndex={0}
+        className="block w-full h-full outline-none"
+        style={{ imageRendering: 'pixelated' }}
+      />
+      <div className="absolute top-4 left-4 flex flex-col gap-2 pointer-events-none">
+        {(gameState?.players || []).map((p: any) => {
+          const isDead = p.lives !== undefined && p.lives <= 0;
+          const livesCount = p.lives ?? 3;
+          return (
+            <div key={p.id} className="bg-[#2e1d0d]/80 border-2 border-[#523315] rounded-lg p-2 flex items-center gap-3 backdrop-blur-sm">
+              <span className={`font-bold text-sm tracking-wider w-20 truncate ${isDead ? 'text-[#ef4444]' : 'text-[#fde6b3]'}`}>
+                {p.name?.split('|')[0] || "?"}
+              </span>
+              <div className="flex gap-1">
+                {isDead ? (
+                  <span className="text-xl">💀</span>
+                ) : (
+                  Array.from({ length: 3 }).map((_, i) => (
+                    <span key={i} className={`text-xl ${i < livesCount ? "animate-pulse" : ""}`}>
+                      {i < livesCount ? "❤️" : "🖤"}
+                    </span>
+                  ))
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }

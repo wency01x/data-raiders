@@ -18,6 +18,7 @@ from shared.constants import TICK_RATE
 
 _start_time = time.time()
 _lobby_open: bool = False  # Host must explicitly open the lobby before anyone can join
+_game_started: bool = False # Lock joins once started
 
 
 @asynccontextmanager
@@ -138,6 +139,7 @@ async def get_lobby():
         "room_number": state.room_number,
         "uptime_seconds": int(time.time() - _start_time),
         "open": _lobby_open,
+        "started": _game_started,
         "status": "open" if _lobby_open else "closed",
     })
 
@@ -146,7 +148,10 @@ async def get_lobby():
 async def open_lobby():
     """Host calls this to open the lobby so other players can join."""
     global _lobby_open
+    global _game_started
     _lobby_open = True
+    _game_started = False
+    state.game_phase = "LOBBY"
     print("[Server] Lobby OPENED by host.")
     return JSONResponse({"open": True, "status": "opened"})
 
@@ -164,6 +169,7 @@ async def close_lobby():
 
 @app.websocket("/ws")
 async def websocket_endpoint(ws: WebSocket):
+    global _game_started
     await ws.accept()
 
     # Gate: reject connections when the host hasn't opened the lobby yet
@@ -171,6 +177,15 @@ async def websocket_endpoint(ws: WebSocket):
         await ws.send_json({
             "type": "lobby_closed",
             "message": "The host hasn't opened the lobby yet. Please wait.",
+        })
+        await ws.close()
+        return
+
+    # Gate: reject if game started
+    if _game_started:
+        await ws.send_json({
+            "type": "lobby_closed",
+            "message": "The game has already started.",
         })
         await ws.close()
         return
@@ -212,9 +227,39 @@ async def websocket_endpoint(ws: WebSocket):
             msg_type = msg.get("type")
 
             if msg_type == "move":
+                if player.hp <= 0:
+                    continue
                 await state.move_player(player.id, msg.get("dx", 0), msg.get("dy", 0))
 
+                # Check loot collisions
+                async with state.lock:
+                    for l in state.loot.values():
+                        if not l.collected:
+                            px = player.x + 28
+                            py = player.y + 28
+                            lx = l.tile_x * 56 + 28
+                            ly = l.tile_y * 56 + 28
+                            dist = ((px - lx)**2 + (py - ly)**2)**0.5
+                            if dist < 40:
+                                l.collected = True
+                                if l.label == "health":
+                                    player.hp = min(player.hp + 1, player.max_hp)
+                                    # Broadcast message? Not strictly needed, HP is synced via tick.
+                                else:
+                                    player.score += l.value
+                                
+                                # Background update DB
+                                def _collect_loot(lid):
+                                    from server.db import get_connection
+                                    conn = get_connection()
+                                    conn.execute("UPDATE loot SET collected=1 WHERE id=?", (lid,))
+                                    conn.commit()
+                                    conn.close()
+                                asyncio.get_running_loop().run_in_executor(None, _collect_loot, l.id)
+
             elif msg_type == "spell":
+                if player.hp <= 0:
+                    continue
                 spell  = msg.get("spell", "")
                 target = msg.get("target_id")
                 result = await cast_spell(player.id, spell, target)
@@ -234,6 +279,8 @@ async def websocket_endpoint(ws: WebSocket):
                 })
 
             elif msg_type == "query":
+                if player.hp <= 0:
+                    continue
                 sql = msg.get("sql", "").strip().rstrip(";").strip()
                 if not sql:
                     await bus.send_to(player.id, {
@@ -285,6 +332,7 @@ async def websocket_endpoint(ws: WebSocket):
                     for p in state.players.values():
                         p.hp = p.max_hp
                         p.score = 0
+                state.game_phase = "PLAYING"
                 print(f"[Server] {player.name} triggered a game reset.")
                 # Reset notification → enqueued
                 await bus.enqueue({
@@ -292,37 +340,56 @@ async def websocket_endpoint(ws: WebSocket):
                     "message": f"{player.name} reset the game!",
                 })
 
-            elif msg_type == "next_room":
-                conn = get_connection()
-                next_room = conn.execute("SELECT * FROM rooms WHERE unlocked=0 ORDER BY id ASC LIMIT 1").fetchone()
-                if next_room:
-                    conn.execute("UPDATE rooms SET unlocked=1 WHERE id=?", (next_room["id"],))
-                    conn.commit()
-                    tbl = next_room["table_ref"]
-                    conn.close()
-                    _load_room(tbl)
-                    async with state.lock:
-                        for i, p in enumerate(state.players.values()):
-                            p.x = float((i + 1) * 2 * 56)
-                            p.y = float(2 * 56)
-                    await bus.enqueue({
-                        "type": "reset_ack",
-                        "message": f"Entering Room {next_room['id']}: {next_room['name']}!",
-                    })
-                else:
-                    conn.close()
-                    total_scores = []
-                    async with state.lock:
-                        for p in state.players.values():
-                            total_scores.append(f"{p.name}: {p.score} pts")
-                    score_str = " | ".join(total_scores)
-                    await bus.enqueue({
-                        "type": "spell_result",
-                        "player_id": player.id,
-                        "spell": "JOIN",
-                        "success": True,
-                        "message": f"🎉 VICTORY! All rooms cleared! Final scores: {score_str}",
-                    })
+            elif msg_type == "start_game":
+                _game_started = True
+                state.game_phase = "JOURNEY_MAP"
+                await bus.enqueue({"type": "reset_ack", "message": "The adventure begins!"})
+                
+                async def start_playing():
+                    await asyncio.sleep(4)
+                    state.game_phase = "PLAYING"
+                asyncio.create_task(start_playing())
+
+            elif msg_type == "trigger_level_complete":
+                if state.game_phase == "PLAYING":
+                    state.game_phase = "LEVEL_COMPLETE"
+                    async def transition():
+                        await asyncio.sleep(3)
+                        conn = get_connection()
+                        next_room = conn.execute("SELECT * FROM rooms WHERE unlocked=0 ORDER BY id ASC LIMIT 1").fetchone()
+                        if next_room:
+                            conn.execute("UPDATE rooms SET unlocked=1 WHERE id=?", (next_room["id"],))
+                            conn.commit()
+                            tbl = next_room["table_ref"]
+                            conn.close()
+                            _load_room(tbl)
+                            async with state.lock:
+                                for i, p in enumerate(state.players.values()):
+                                    p.x = float((i + 1) * 2 * 56)
+                                    p.y = float(2 * 56)
+                            state.game_phase = "JOURNEY_MAP"
+                            await bus.enqueue({
+                                "type": "reset_ack",
+                                "message": f"Entering Level {next_room['id']}: {next_room['name']}!",
+                            })
+                            await asyncio.sleep(4)
+                            state.game_phase = "PLAYING"
+                        else:
+                            conn.close()
+                            total_scores = []
+                            async with state.lock:
+                                for p in state.players.values():
+                                    total_scores.append(f"{p.name}: {p.score} pts")
+                            score_str = " | ".join(total_scores)
+                            await bus.enqueue({
+                                "type": "spell_result",
+                                "player_id": player.id,
+                                "spell": "JOIN",
+                                "success": True,
+                                "message": f"🎉 VICTORY! All levels cleared! Final scores: {score_str}",
+                            })
+                            state.game_phase = "VICTORY"
+                    asyncio.create_task(transition())
 
             elif msg_type == "chat":
                 await bus.enqueue({
