@@ -1,6 +1,8 @@
 import { useEffect, useState, useRef } from "react";
 import GameCanvas from "./GameCanvas";
 import "./index.css";
+import introMusicUrl from './assets/audio/bg-intro-music.mp3';
+import ingameMusicUrl from './assets/audio/bg-ingame-music.mp3';
 
 export default function App() {
   type ViewState = 'TITLE' | 'LOBBY' | 'LOADING' | 'GAME';
@@ -12,6 +14,25 @@ export default function App() {
   const [tutorialStep, setTutorialStep] = useState(0);
   const [shouldConnect, setShouldConnect] = useState(false);
   const [scale, setScale] = useState(1);
+
+  // ── Audio State ────────────────────────────────────────────────────────
+  const introAudioRef = useRef<HTMLAudioElement | null>(null);
+  const ingameAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    introAudioRef.current = new Audio(introMusicUrl);
+    introAudioRef.current.loop = true;
+    introAudioRef.current.volume = 0.5; // Set reasonable volume
+
+    ingameAudioRef.current = new Audio(ingameMusicUrl);
+    ingameAudioRef.current.loop = true;
+    ingameAudioRef.current.volume = 0.4;
+
+    return () => {
+      introAudioRef.current?.pause();
+      ingameAudioRef.current?.pause();
+    };
+  }, []);
 
   useEffect(() => {
     const handleResize = () => {
@@ -62,6 +83,44 @@ export default function App() {
   );
   const [playerClass, setPlayerClass] = useState("Archer");
   const [gameMode, setGameMode] = useState("Standard");
+
+  // ── Audio Playback Management ──────────────────────────────────────────
+  const syncMusic = () => {
+    if (!introAudioRef.current || !ingameAudioRef.current) return;
+    const introAudio = introAudioRef.current;
+    const ingameAudio = ingameAudioRef.current;
+
+    // Stop all music when players died or game over
+    if (showDeathScreen || showGameOver) {
+      introAudio.pause();
+      ingameAudio.pause();
+      return;
+    }
+
+    // Play based on view
+    if (view === 'TITLE' || view === 'LOBBY' || view === 'LOADING') {
+      ingameAudio.pause();
+      if (introAudio.paused) {
+        introAudio.play().catch(() => console.log('Autoplay blocked'));
+      }
+    } else if (view === 'GAME') {
+      introAudio.pause();
+      if (ingameAudio.paused) {
+        ingameAudio.play().catch(() => console.log('Autoplay blocked'));
+      }
+    }
+  };
+
+  useEffect(() => {
+    syncMusic();
+  }, [view, showDeathScreen, showGameOver]);
+
+  useEffect(() => {
+    // Attempt to start music on any click if it was blocked by browser autoplay policy
+    const handleInteraction = () => syncMusic();
+    document.addEventListener('click', handleInteraction);
+    return () => document.removeEventListener('click', handleInteraction);
+  }, [view, showDeathScreen, showGameOver]);
   const [speedrunStart, setSpeedrunStart] = useState<number | null>(null);
   const [elapsedTime, setElapsedTime] = useState(0);
 
