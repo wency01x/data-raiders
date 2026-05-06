@@ -5,8 +5,8 @@ import introMusicUrl from './assets/audio/bg-intro-music.mp3';
 import ingameMusicUrl from './assets/audio/bg-ingame-music.mp3';
 
 export default function App() {
-  type ViewState = 'TITLE' | 'LOBBY' | 'LOADING' | 'GAME';
-  const [view, setView] = useState<ViewState>('TITLE');
+  type ViewState = 'ENTER' | 'TITLE' | 'LOBBY' | 'LOADING' | 'GAME';
+  const [view, setView] = useState<ViewState>('ENTER');
   const [showSettings, setShowSettings] = useState(false);
   const [showHowToPlay, setShowHowToPlay] = useState(false);
   const [showQuitConfirm, setShowQuitConfirm] = useState(false);
@@ -406,6 +406,27 @@ export default function App() {
       setTutorialStep(1);
     }
   }, [view, roomNum]);
+
+  if (view === 'ENTER') {
+    return (
+      <div className={`h-full w-full bg-[#1e1208] flex flex-col items-center justify-center font-sans relative overflow-hidden cursor-pointer transition-all duration-500`}
+           onClick={() => {
+             if (introAudioRef.current) {
+               introAudioRef.current.play().catch(() => console.log('Autoplay blocked'));
+             }
+             setView('TITLE');
+           }}>
+        <div style={{ transform: `scale(${scale})` }} className="z-10 flex flex-col items-center gap-6 origin-center animate-pulse">
+          <h1 className="text-4xl md:text-6xl font-pixelify text-[#ffdb7a] tracking-widest drop-shadow-[0_5px_15px_rgba(255,219,122,0.6)]">
+            CLICK TO ENTER
+          </h1>
+          <p className="text-[#d4b483] font-bold text-xl tracking-widest mt-[-10px]">
+            DATA RAIDERS
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   if (view === 'TITLE') {
     return (
