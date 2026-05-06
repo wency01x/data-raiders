@@ -17,8 +17,8 @@ from server.spell_engine import cast_spell
 from shared.constants import TICK_RATE
 
 _start_time = time.time()
-_lobby_open: bool = False  # Host must explicitly open the lobby before anyone can join
-_game_started: bool = False # Lock joins once started
+_lobby_open: bool = False    # Host must explicitly open the lobby before anyone can join
+_game_started: bool = False  # Set to True when host clicks START ADVENTURE; reset when all leave
 
 
 @asynccontextmanager
@@ -147,8 +147,10 @@ async def get_lobby():
 @app.post("/lobby/open")
 async def open_lobby():
     """Host calls this to open the lobby so other players can join."""
-    global _lobby_open
-    global _game_started
+    global _game_started, _lobby_open
+    if _lobby_open:
+        return JSONResponse({"open": True, "status": "already_open", "error": "Lobby is already open by another player."}, status_code=400)
+    
     _lobby_open = True
     _game_started = False
     state.game_phase = "LOBBY"
@@ -169,7 +171,7 @@ async def close_lobby():
 
 @app.websocket("/ws")
 async def websocket_endpoint(ws: WebSocket):
-    global _game_started
+    global _game_started, _lobby_open
     await ws.accept()
 
     # Gate: reject connections when the host hasn't opened the lobby yet
@@ -410,3 +412,11 @@ async def websocket_endpoint(ws: WebSocket):
             await bus.disconnect(player.id)
             await bus.enqueue({"type": "player_left", "player_id": player.id, "player_name": player.name})
             print(f"[Server] {player.name} disconnected. | Players online: {bus.player_count}")
+
+            # When the last player leaves, reset all session state so a new game can be hosted
+            if bus.player_count == 0:
+                # (globals declared at top of function)
+                _lobby_open = False
+                _game_started = False
+                state.game_phase = "LOBBY"
+                print("[Server] All players disconnected — lobby reset for new session.")
