@@ -26,11 +26,13 @@ export default function App() {
 
   // ── Lobby / server-browser state ─────────────────────────────────────────
   const [lobbyMode, setLobbyMode] = useState<'create' | 'join'>('create');
+  const [lobbyError, setLobbyError] = useState('');
 
   // CREATE LOBBY — always points at YOUR local server (localhost)
   const [hostInfo, setHostInfo]           = useState<any>(null);
   const [isHostPinging, setIsHostPinging] = useState(false);
   const [lobbyIsOpen, setLobbyIsOpen]     = useState(false);
+  const [amIHost, setAmIHost]             = useState(false);
   const [isOpening, setIsOpening]         = useState(false);
 
   // JOIN SERVER — whatever IP the user types
@@ -136,10 +138,13 @@ export default function App() {
           }
           break;
         case "lobby_closed":
-          // Server rejected us — lobby not open yet, go back to lobby screen
-          setMessages([]);
+          // Server rejected connection — show a clean UI error, not a browser alert
+          setShouldConnect(false);
+          setLobbyIsOpen(false);
+          setHostInfo(null);
+          setJoinInfo(null);
+          setLobbyError(msg.message || 'Lobby is closed. The host must open it first.');
           setView('LOBBY');
-          alert('The host closed the lobby or it is not open yet. Please wait.');
           break;
         case "player_died":
           if (msg.player_id === myIdRef.current) {
@@ -204,13 +209,21 @@ export default function App() {
 
   const openLobby = async () => {
     setIsOpening(true);
+    setLobbyError('');
     try {
-      await fetch(`${window.location.protocol}//${window.location.hostname}:8000/lobby/open`, { method: 'POST' });
+      const res = await fetch(`${window.location.protocol}//${window.location.hostname}:8000/lobby/open`, { method: 'POST' });
+      if (!res.ok) {
+        const data = await res.json();
+        setLobbyError(data.error || 'Failed to open lobby.');
+        await pingLocalServer();
+        return;
+      }
       setLobbyIsOpen(true);
+      setAmIHost(true);
       // Re-ping to refresh info
       await pingLocalServer();
     } catch {
-      // ignore
+      setLobbyError('Failed to connect to server.');
     } finally {
       setIsOpening(false);
     }
@@ -505,10 +518,19 @@ export default function App() {
             <p className="text-[#d4b483] font-semibold text-sm mt-1 tracking-wider">Host a game or join a friend&apos;s server</p>
           </div>
 
+          {/* Error banner */}
+          {lobbyError && (
+            <div className="bg-[#450a0a] border-2 border-[#dc2626] rounded-xl px-4 py-3 flex items-center gap-3 max-w-2xl mx-auto w-full">
+              <span className="text-xl">⚠️</span>
+              <p className="text-[#fca5a5] font-bold text-sm flex-1">{lobbyError}</p>
+              <button onClick={() => setLobbyError('')} className="text-[#fca5a5] hover:text-white text-lg leading-none">×</button>
+            </div>
+          )}
+
           {/* Mode Tab Switcher */}
           <div className={`flex gap-0 bg-[#2e1d0d] border-[4px] border-[#1e1208] rounded-2xl p-1.5 max-w-2xl w-full mx-auto ${shouldConnect ? 'opacity-50 pointer-events-none' : ''}`}>
             <button
-              onClick={() => { setLobbyMode('create'); pingLocalServer(); }}
+              onClick={() => { setLobbyMode('create'); setLobbyError(''); pingLocalServer(); }}
               className={`flex-1 py-3 rounded-xl font-pixelify tracking-widest text-lg transition-all ${
                 lobbyMode === 'create'
                   ? 'bg-[#4ade80] text-[#064e3b] shadow-[0_0_15px_rgba(74,222,128,0.5)] border-b-[4px] border-[#16a34a]'
@@ -518,7 +540,7 @@ export default function App() {
               🏰 CREATE LOBBY
             </button>
             <button
-              onClick={() => { setLobbyMode('join'); setJoinInfo(null); setJoinError(''); }}
+              onClick={() => { setLobbyMode('join'); setLobbyError(''); setJoinInfo(null); setJoinError(''); }}
               className={`flex-1 py-3 rounded-xl font-pixelify tracking-widest text-lg transition-all ${
                 lobbyMode === 'join'
                   ? 'bg-[#38bdf8] text-[#0c4a6e] shadow-[0_0_15px_rgba(56,189,248,0.5)] border-b-[4px] border-[#0369a1]'
@@ -568,12 +590,24 @@ export default function App() {
                         </div>
 
                         {/* Lobby open/closed status + action */}
-                        {lobbyIsOpen ? (
+                        {lobbyIsOpen && amIHost && (
                           <div className="flex items-center justify-center gap-2 bg-[#14532d]/40 border border-[#4ade80]/40 rounded-lg py-3 px-4">
                             <span className="w-2.5 h-2.5 rounded-full bg-[#4ade80] shadow-[0_0_10px_rgba(74,222,128,0.9)] animate-pulse" />
                             <span className="text-[#4ade80] font-black text-sm tracking-widest">LOBBY OPEN — Friends can now join!</span>
                           </div>
-                        ) : (
+                        )}
+                        {lobbyIsOpen && !amIHost && (
+                          <div className="text-center py-2">
+                            <p className="text-[10px] text-[#fca5a5] font-semibold text-center mb-2">🔒 Lobby is already open by another player.</p>
+                            <button
+                              onClick={() => { setLobbyMode('join'); setLobbyError(''); setJoinInfo(null); setJoinError(''); }}
+                              className="w-full bg-[#0369a1] hover:bg-[#0284c7] active:bg-[#075985] text-white border-b-[4px] border-[#075985] active:border-b-0 active:translate-y-[4px] font-pixelify tracking-widest py-3 rounded-xl text-lg transition-all shadow-[0_0_15px_rgba(3,105,161,0.4)]"
+                            >
+                              JOIN EXISTING LOBBY ➔
+                            </button>
+                          </div>
+                        )}
+                        {!lobbyIsOpen && (
                           <>
                             <p className="text-[10px] text-[#fca5a5] text-center font-semibold">🔒 Lobby is closed — friends cannot join yet.</p>
                             <button
@@ -606,9 +640,9 @@ export default function App() {
                         className="flex-1 bg-[#5c3e21] hover:bg-[#3e240f] text-[#d4b483] border-b-[4px] border-[#3e240f] active:border-b-0 active:translate-y-[4px] font-pixelify tracking-wider px-6 py-4 rounded-xl text-xl transition-all">
                         ← BACK
                       </button>
-                      <button onClick={() => setShouldConnect(true)} disabled={!hostInfo || !lobbyIsOpen}
+                      <button onClick={() => setShouldConnect(true)} disabled={!hostInfo || !lobbyIsOpen || !amIHost}
                         className="flex-grow-[2] bg-[#4ade80] hover:bg-[#22c55e] active:bg-[#16a34a] disabled:bg-[#3e240f] disabled:text-[#6b4c2a] disabled:cursor-not-allowed text-[#064e3b] border-b-[4px] border-[#16a34a] active:border-b-0 active:translate-y-[4px] font-pixelify tracking-widest px-8 py-4 rounded-xl text-xl transition-all shadow-[0_0_20px_rgba(74,222,128,0.4)]">
-                        {!hostInfo ? 'SERVER NOT FOUND' : !lobbyIsOpen ? '🔒 OPEN LOBBY FIRST' : 'START AS HOST ➔'}
+                        {!hostInfo ? 'SERVER NOT FOUND' : (!lobbyIsOpen || !amIHost) ? '🔒 WAIT FOR HOST' : 'START AS HOST ➔'}
                       </button>
                     </div>
                   )}
@@ -1226,6 +1260,14 @@ export default function App() {
                 setMessages([]);
                 setShouldConnect(false);
                 ws?.close();
+                // Reset lobby state so host must re-open for the next session
+                setLobbyIsOpen(false);
+                setHostInfo(null);
+                setJoinInfo(null);
+                setJoinIp('');
+                setLobbyError('');
+                setAmIHost(false);
+                setLobbyMode('create');
                 setView('LOBBY');
               }}
               className="mt-4 bg-[#dc2626] hover:bg-[#b91c1c] active:bg-[#991b1b] text-white font-pixelify tracking-widest px-10 py-5 rounded-2xl text-2xl border-b-[6px] border-[#991b1b] active:border-b-0 active:translate-y-[6px] transition-all shadow-[0_0_30px_rgba(220,38,38,0.5)]"
