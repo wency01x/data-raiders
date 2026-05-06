@@ -229,6 +229,27 @@ export default function App() {
     }
   };
 
+  const leaveLobby = async () => {
+    if (amIHost) {
+      try {
+        await fetch(`${window.location.protocol}//${window.location.hostname}:8000/lobby/close`, { method: 'POST' });
+      } catch {}
+    }
+    setGameState(null);
+    setMyId(null);
+    setMessages([]);
+    setShouldConnect(false);
+    if (ws) ws.close();
+    setWs(null);
+    setLobbyIsOpen(false);
+    setHostInfo(null);
+    setJoinInfo(null);
+    setJoinIp('');
+    setLobbyError('');
+    setAmIHost(false);
+    setLobbyMode('create');
+  };
+
   const pingJoinServer = async (ip: string) => {
     if (!ip.trim()) return;
     setIsJoinPinging(true);
@@ -1196,7 +1217,11 @@ export default function App() {
                 CANCEL
               </button>
               <button 
-                onClick={() => { setShowQuitConfirm(false); setView('TITLE'); }}
+                onClick={() => {
+                  setShowQuitConfirm(false);
+                  leaveLobby();
+                  setView('TITLE');
+                }}
                 className="flex-1 bg-[#ef4444] hover:bg-[#dc2626] active:bg-[#b91c1c] text-[#fde6b3] border-b-[4px] border-[#b91c1c] active:border-b-0 active:translate-y-[4px] font-bold py-3 rounded-lg transition-all text-sm shadow-[0_0_10px_rgba(239,68,68,0.5)]"
               >
                 QUIT
@@ -1252,22 +1277,10 @@ export default function App() {
               Better luck next time, Raider.
             </p>
             <button
-              onClick={() => {
+              onClick={async () => {
                 setShowGameOver(false);
                 setShowDeathScreen(false);
-                setGameState(null);
-                setMyId(null);
-                setMessages([]);
-                setShouldConnect(false);
-                ws?.close();
-                // Reset lobby state so host must re-open for the next session
-                setLobbyIsOpen(false);
-                setHostInfo(null);
-                setJoinInfo(null);
-                setJoinIp('');
-                setLobbyError('');
-                setAmIHost(false);
-                setLobbyMode('create');
+                await leaveLobby();
                 setView('LOBBY');
               }}
               className="mt-4 bg-[#dc2626] hover:bg-[#b91c1c] active:bg-[#991b1b] text-white font-pixelify tracking-widest px-10 py-5 rounded-2xl text-2xl border-b-[6px] border-[#991b1b] active:border-b-0 active:translate-y-[6px] transition-all shadow-[0_0_30px_rgba(220,38,38,0.5)]"
