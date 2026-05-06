@@ -50,6 +50,7 @@ export default function App() {
   const [serverStats, setServerStats] = useState<any>(null);
   const [showDeathScreen, setShowDeathScreen] = useState(false);
   const [deathCountdown, setDeathCountdown] = useState(3);
+  const [showGameOver, setShowGameOver] = useState(false);
   const [ws, setWs] = useState<WebSocket | null>(null);
   const [gameState, setGameState] = useState<any>(null);
   const [myId, setMyId] = useState<string | null>(null);
@@ -144,10 +145,18 @@ export default function App() {
           if (msg.player_id === myIdRef.current) {
             if (msg.lives_left > 0) {
               setShowDeathScreen(true);
+            } else {
+              // No lives left — show permanent game over screen
+              setShowDeathScreen(false);
+              setShowGameOver(true);
             }
           } else {
             const diedName = msg.player_name ? msg.player_name.split('|')[0] : `Player ${(msg.player_id || "?").slice(0, 4)}`;
-            setMessages((m) => [...m, `💀 ${diedName} died!`]);
+            if (msg.lives_left > 0) {
+              setMessages((m) => [...m, `💀 ${diedName} died! (${msg.lives_left} lives left)`]);
+            } else {
+              setMessages((m) => [...m, `☠️ ${diedName} is OUT — no lives left!`]);
+            }
           }
           break;
         case "player_respawned":
@@ -1182,6 +1191,47 @@ export default function App() {
             <p className="text-[#fca5a5] font-bold text-lg mt-4 animate-pulse tracking-widest">
               Respawning in {deathCountdown} seconds...
             </p>
+          </div>
+        </div>
+      )}
+
+      {/* ── GAME OVER OVERLAY ──────────────────────────────────────── */}
+      {showGameOver && (
+        <div className="absolute inset-0 z-[70] flex flex-col items-center justify-center bg-black/95 animate-[fadeIn_0.5s_ease-out]">
+          <div className="flex flex-col items-center gap-6 text-center px-8">
+            <p className="text-9xl animate-[deathPulse_1s_ease-in-out_infinite_alternate]">💀</p>
+            <p
+              className="text-[#ff2222] font-pixelify text-7xl md:text-8xl tracking-widest"
+              style={{ textShadow: '0 0 40px #ff0000, 0 0 80px #660000' }}
+            >
+              GAME OVER
+            </p>
+            <p className="text-[#fca5a5] font-pixelify text-2xl md:text-3xl tracking-widest animate-pulse">
+              YOU LOST ALL YOUR HEARTS
+            </p>
+            <div className="flex gap-3 mt-1">
+              {[1,2,3].map(i => (
+                <span key={i} className="text-4xl grayscale opacity-30">❤️</span>
+              ))}
+            </div>
+            <p className="text-[#d4b483] font-semibold text-sm tracking-wider">
+              Better luck next time, Raider.
+            </p>
+            <button
+              onClick={() => {
+                setShowGameOver(false);
+                setShowDeathScreen(false);
+                setGameState(null);
+                setMyId(null);
+                setMessages([]);
+                setShouldConnect(false);
+                ws?.close();
+                setView('LOBBY');
+              }}
+              className="mt-4 bg-[#dc2626] hover:bg-[#b91c1c] active:bg-[#991b1b] text-white font-pixelify tracking-widest px-10 py-5 rounded-2xl text-2xl border-b-[6px] border-[#991b1b] active:border-b-0 active:translate-y-[6px] transition-all shadow-[0_0_30px_rgba(220,38,38,0.5)]"
+            >
+              ← BACK TO LOBBY
+            </button>
           </div>
         </div>
       )}
