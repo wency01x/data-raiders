@@ -90,21 +90,25 @@ export default function App() {
     const introAudio = introAudioRef.current;
     const ingameAudio = ingameAudioRef.current;
 
-    // Stop all music when players died or game over
+    // Stop and rewind all music when players die or game over
     if (showDeathScreen || showGameOver) {
       introAudio.pause();
+      introAudio.currentTime = 0;
       ingameAudio.pause();
+      ingameAudio.currentTime = 0;
       return;
     }
 
     // Play based on view
     if (view === 'TITLE' || view === 'LOBBY' || view === 'LOADING') {
       ingameAudio.pause();
+      ingameAudio.currentTime = 0;
       if (introAudio.paused) {
         introAudio.play().catch(() => console.log('Autoplay blocked'));
       }
     } else if (view === 'GAME') {
       introAudio.pause();
+      introAudio.currentTime = 0;
       if (ingameAudio.paused) {
         ingameAudio.play().catch(() => console.log('Autoplay blocked'));
       }
