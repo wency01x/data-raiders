@@ -232,7 +232,8 @@ class GameState:
             elif self.room_number == 2 and e.extra.get("dept") == "BUGS":
                 count += 1
             elif self.room_number == 3 and e.extra.get("role") == "Dev":
-                count += 1
+                if e.extra.get("salary", 0) < 100000:
+                    count += 1
             elif self.room_number in (4, 5):
                 count += 1
         return count
