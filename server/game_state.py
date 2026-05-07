@@ -34,6 +34,8 @@ class Enemy:
     max_hp: int
     tile_x: int
     tile_y: int
+    x: float = 0.0
+    y: float = 0.0
     alive: bool = True
     depends_on: list = None
     # Extra row data for display
@@ -42,6 +44,8 @@ class Enemy:
     def __post_init__(self):
         if self.depends_on is None:
             self.depends_on = []
+        self.x = float(self.tile_x * TILE_SIZE)
+        self.y = float(self.tile_y * TILE_SIZE)
 
     is_target: bool = True
 
@@ -49,8 +53,8 @@ class Enemy:
         d = {
             "id": self.id, "label": self.label,
             "hp": self.hp, "max_hp": self.max_hp,
-            "x": self.tile_x * TILE_SIZE,
-            "y": self.tile_y * TILE_SIZE,
+            "x": self.x,
+            "y": self.y,
             "alive": self.alive,
             "depends_on": self.depends_on,
             "is_target": self.is_target,
@@ -92,6 +96,7 @@ class GameState:
         self.room_number:    int = 1
         self.allowed_spells: list[str] = ["SELECT", "DELETE"]
         self.game_phase: str = "LOBBY"
+        self.room_joined: bool = False
         self._color_counter = 0
 
     def next_color_idx(self) -> int:
@@ -127,6 +132,7 @@ class GameState:
     def load_enemies(self, rows, extra_cols=None):
         """Load enemies from DB rows. extra_cols lists column names beyond the standard ones."""
         self.enemies.clear()
+        self.room_joined = False
         standard = {"id", "label", "hp", "max_hp", "tile_x", "tile_y", "alive", "depends_on"}
         for row in rows:
             raw_dep = row["depends_on"] or ""
@@ -217,6 +223,7 @@ class GameState:
             "hint":       self.room_hint,
             "allowed_spells": self.allowed_spells,
             "room_cleared":   self.is_room_cleared(),
+            "room_joined":    self.room_joined,
             "targets_remaining": self.targets_remaining,
             "game_phase":     self.game_phase,
         }
