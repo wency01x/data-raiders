@@ -252,7 +252,7 @@ export default function App() {
           setLobbyIsOpen(false);
           setHostInfo(null);
           setJoinInfo(null);
-          setJoinNeedsRoleChange(Boolean(msg.change_role_required) && lobbyMode === 'join');
+          setJoinNeedsRoleChange(Boolean(msg.change_role_required));
           setLobbyError(msg.message || 'Lobby is closed. The host must open it first.');
           setView('LOBBY');
           break;
@@ -310,11 +310,6 @@ export default function App() {
       const data = await res.json();
       setHostInfo(data);
       setLobbyIsOpen(data.open === true);
-      const takenRoles = Array.isArray(data.taken_roles) ? data.taken_roles : [];
-      if (takenRoles.includes(playerClass)) {
-        const fallback = ROLE_OPTIONS.find((r) => !takenRoles.includes(r.value));
-        if (fallback) setPlayerClass(fallback.value);
-      }
     } catch {
       setHostInfo(null);
       setLobbyIsOpen(false);
@@ -645,34 +640,12 @@ export default function App() {
       return `${Math.floor(s / 60)}m ${s % 60}s`;
     };
 
-    const takenRolesFromState = new Set<string>(
-      (gameState?.players ?? [])
-        .map((p: any) => {
-          const role = p.name?.split('|')?.[1] || '';
-          const isMe = p.id === myId;
-          return isMe ? '' : role;
-        })
-        .filter(Boolean)
-    );
-    const lobbyTakenRolesRaw = lobbyMode === 'join' ? [] : hostInfo?.taken_roles;
-    const takenRolesFromLobbyInfo = new Set<string>(
-      Array.isArray(lobbyTakenRolesRaw) ? lobbyTakenRolesRaw : []
-    );
-    const takenRoles = ws ? takenRolesFromState : takenRolesFromLobbyInfo;
-    const selectedRoleTaken = !ws && (
-      lobbyMode === 'join'
-        ? joinNeedsRoleChange
-        : takenRoles.has(playerClass)
-    );
-    const availableRoles = ROLE_OPTIONS.filter((r) => (
-      lobbyMode === 'join'
-        ? r.value !== playerClass
-        : !takenRoles.has(r.value)
-    ));
+    const selectedRoleTaken = !ws && joinNeedsRoleChange;
+    const availableRoles = ROLE_OPTIONS.filter((r) => r.value !== playerClass);
 
     const classOptions = ROLE_OPTIONS.map((r) => ({
       value: r.value,
-      label: `${r.icon} ${r.label}${(lobbyMode === 'create' && takenRoles.has(r.value)) ? " (TAKEN)" : ""}`,
+      label: `${r.icon} ${r.label}`,
     }));
 
     // Shared player setup block — class picker locked once connected
@@ -709,10 +682,6 @@ export default function App() {
                 label="CHARACTER CLASS"
                 value={playerClass}
                 onChange={(val) => {
-                  if (lobbyMode === 'create' && takenRoles.has(val)) {
-                    setLobbyError(`Role "${val}" is already taken. Please choose another role.`);
-                    return;
-                  }
                   setJoinNeedsRoleChange(false);
                   setLobbyError('');
                   setPlayerClass(val);
