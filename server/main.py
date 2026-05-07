@@ -366,14 +366,14 @@ async def websocket_endpoint(ws: WebSocket):
                     conn = get_connection()
                     try:
                         cursor = conn.execute(sql)
-                        rows = cursor.fetchmany(20)
+                        rows = cursor.fetchall()
                         columns = [desc[0] for desc in cursor.description] if cursor.description else []
                         result_rows = [list(row) for row in rows]
-                        total = conn.execute(f"SELECT COUNT(*) FROM ({sql})").fetchone()[0]
+                        total = len(result_rows)
                         result_payload = {
                             "type": "query_result",
                             "success": True,
-                            "message": f"[WIZARD] Query returned {total} row(s)" + (f" (showing first 20)" if total > 20 else ""),
+                            "message": f"[WIZARD] Query returned {total} row(s)",
                             "columns": columns,
                             "rows": result_rows,
                             "queried_by": player.name.split("|")[0],
