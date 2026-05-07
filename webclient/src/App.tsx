@@ -4,6 +4,12 @@ import "./index.css";
 import introMusicUrl from './assets/audio/bg-intro-music.mp3';
 import ingameMusicUrl from './assets/audio/bg-ingame-music.mp3';
 
+const ROLE_OPTIONS = [
+  { value: "Archer", icon: "🏹", label: "Archer (Deleter)" },
+  { value: "Swordsman", icon: "⚔️", label: "Swordsman (Deleter)" },
+  { value: "Wizard", icon: "🧙", label: "Wizard (Query)" },
+] as const;
+
 function CustomSelect({ value, options, onChange, label }: { value: string, options: {value: string, label: string}[], onChange: (val: string) => void, label: string }) {
   const [isOpen, setIsOpen] = useState(false);
   const selectedLabel = options.find(o => o.value === value)?.label || value;
@@ -95,6 +101,7 @@ export default function App() {
   const [joinInfo, setJoinInfo]       = useState<any>(null);
   const [isJoinPinging, setIsJoinPinging] = useState(false);
   const [joinError, setJoinError]     = useState('');
+  const [joinNeedsRoleChange, setJoinNeedsRoleChange] = useState(false);
 
   // Derived: which host does the WebSocket connect to?
   const serverHost = lobbyMode === 'create' ? window.location.hostname : joinIp;
@@ -194,6 +201,7 @@ export default function App() {
 
     socket.onopen = () => {
       setWs(socket);
+      setJoinNeedsRoleChange(false);
       socket.send(JSON.stringify({ type: "join", player_name: `${playerName}|${playerClass}` }));
       if (gameMode === 'Speedrun') setSpeedrunStart(Date.now());
     };
@@ -244,6 +252,7 @@ export default function App() {
           setLobbyIsOpen(false);
           setHostInfo(null);
           setJoinInfo(null);
+          setJoinNeedsRoleChange(Boolean(msg.change_role_required) && lobbyMode === 'join');
           setLobbyError(msg.message || 'Lobby is closed. The host must open it first.');
           setView('LOBBY');
           break;
@@ -301,6 +310,11 @@ export default function App() {
       const data = await res.json();
       setHostInfo(data);
       setLobbyIsOpen(data.open === true);
+      const takenRoles = Array.isArray(data.taken_roles) ? data.taken_roles : [];
+      if (takenRoles.includes(playerClass)) {
+        const fallback = ROLE_OPTIONS.find((r) => !takenRoles.includes(r.value));
+        if (fallback) setPlayerClass(fallback.value);
+      }
     } catch {
       setHostInfo(null);
       setLobbyIsOpen(false);
@@ -363,6 +377,7 @@ export default function App() {
       const data = await res.json();
       setJoinInfo(data);
       setJoinIp(ip.trim()); // lock in the successfully-pinged IP
+      setJoinNeedsRoleChange(false);
     } catch {
       setJoinError('Could not reach server at that address. Is the host running python3 runserver.py?');
       setJoinInfo(null);
@@ -630,17 +645,35 @@ export default function App() {
       return `${Math.floor(s / 60)}m ${s % 60}s`;
     };
 
-    // Derived: is the Wizard role already taken by another connected player?
-    const wizardTakenByOther = gameState?.players?.some(
-      (p: any) => p.name.endsWith('|Wizard') && p.id !== myId
-    ) ?? false;
+    const takenRolesFromState = new Set<string>(
+      (gameState?.players ?? [])
+        .map((p: any) => {
+          const role = p.name?.split('|')?.[1] || '';
+          const isMe = p.id === myId;
+          return isMe ? '' : role;
+        })
+        .filter(Boolean)
+    );
+    const lobbyTakenRolesRaw = lobbyMode === 'join' ? [] : hostInfo?.taken_roles;
+    const takenRolesFromLobbyInfo = new Set<string>(
+      Array.isArray(lobbyTakenRolesRaw) ? lobbyTakenRolesRaw : []
+    );
+    const takenRoles = ws ? takenRolesFromState : takenRolesFromLobbyInfo;
+    const selectedRoleTaken = !ws && (
+      lobbyMode === 'join'
+        ? joinNeedsRoleChange
+        : takenRoles.has(playerClass)
+    );
+    const availableRoles = ROLE_OPTIONS.filter((r) => (
+      lobbyMode === 'join'
+        ? r.value !== playerClass
+        : !takenRoles.has(r.value)
+    ));
 
-    // Class options — disable Wizard if already taken by someone else
-    const classOptions = [
-      { value: "Archer",    label: "🏹 Archer (Deleter)" },
-      { value: "Swordsman", label: "⚔️ Swordsman (Deleter)" },
-      { value: "Wizard",    label: wizardTakenByOther ? "🧙 Wizard (TAKEN)" : "🧙 Wizard (Query)" },
-    ];
+    const classOptions = ROLE_OPTIONS.map((r) => ({
+      value: r.value,
+      label: `${r.icon} ${r.label}${(lobbyMode === 'create' && takenRoles.has(r.value)) ? " (TAKEN)" : ""}`,
+    }));
 
     // Shared player setup block — class picker locked once connected
     const PlayerSetup = (
@@ -676,7 +709,12 @@ export default function App() {
                 label="CHARACTER CLASS"
                 value={playerClass}
                 onChange={(val) => {
-                  if (val === 'Wizard' && wizardTakenByOther) return;
+                  if (lobbyMode === 'create' && takenRoles.has(val)) {
+                    setLobbyError(`Role "${val}" is already taken. Please choose another role.`);
+                    return;
+                  }
+                  setJoinNeedsRoleChange(false);
+                  setLobbyError('');
                   setPlayerClass(val);
                 }}
                 options={classOptions}
@@ -693,6 +731,28 @@ export default function App() {
             ]}
           />
         </div>
+        {!ws && selectedRoleTaken && (
+          <div className="bg-[#450a0a] border-2 border-[#dc2626] rounded-lg p-3">
+            <p className="text-[#fca5a5] text-xs font-bold tracking-wide">
+              Selected role is already taken on this server. Change role to continue.
+            </p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {availableRoles.map((role) => (
+                <button
+                  key={role.value}
+                  onClick={() => {
+                    setPlayerClass(role.value);
+                    setJoinNeedsRoleChange(false);
+                    setLobbyError('');
+                  }}
+                  className="bg-[#3e240f] hover:bg-[#523315] text-[#fde6b3] border border-[#2e1d0d] px-2.5 py-1 rounded text-[10px] font-black tracking-wide transition-colors"
+                >
+                  {role.icon} Change to {role.value}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     );
 
@@ -830,9 +890,9 @@ export default function App() {
                         className="flex-1 bg-[#5c3e21] hover:bg-[#3e240f] text-[#d4b483] border-b-[4px] border-[#3e240f] active:border-b-0 active:translate-y-[4px] font-pixelify tracking-wider px-6 py-4 rounded-xl text-xl transition-all">
                         ← BACK
                       </button>
-                      <button onClick={() => setShouldConnect(true)} disabled={!hostInfo || !lobbyIsOpen || !amIHost}
+                      <button onClick={() => setShouldConnect(true)} disabled={!hostInfo || !lobbyIsOpen || !amIHost || selectedRoleTaken}
                         className="flex-grow-[2] bg-[#4ade80] hover:bg-[#22c55e] active:bg-[#16a34a] disabled:bg-[#3e240f] disabled:text-[#6b4c2a] disabled:cursor-not-allowed text-[#064e3b] border-b-[4px] border-[#16a34a] active:border-b-0 active:translate-y-[4px] font-pixelify tracking-widest px-8 py-4 rounded-xl text-xl transition-all shadow-[0_0_20px_rgba(74,222,128,0.4)]">
-                        {!hostInfo ? 'SERVER NOT FOUND' : (!lobbyIsOpen || !amIHost) ? '🔒 WAIT FOR HOST' : 'START AS HOST ➔'}
+                        {!hostInfo ? 'SERVER NOT FOUND' : selectedRoleTaken ? 'CHANGE ROLE FIRST' : (!lobbyIsOpen || !amIHost) ? '🔒 WAIT FOR HOST' : 'START AS HOST ➔'}
                       </button>
                     </div>
                   )}
@@ -888,9 +948,9 @@ export default function App() {
                         className="flex-1 bg-[#5c3e21] hover:bg-[#3e240f] text-[#d4b483] border-b-[4px] border-[#3e240f] active:border-b-0 active:translate-y-[4px] font-pixelify tracking-wider px-6 py-4 rounded-xl text-xl transition-all">
                         ← BACK
                       </button>
-                      <button onClick={() => setShouldConnect(true)} disabled={!joinInfo || !joinInfo.open}
+                      <button onClick={() => setShouldConnect(true)} disabled={!joinInfo || !joinInfo.open || selectedRoleTaken}
                         className="flex-grow-[2] bg-[#d97706] hover:bg-[#b45309] active:bg-[#92400e] disabled:bg-[#5c3e21] disabled:text-[#6b4c2a] disabled:border-[#3e240f] disabled:cursor-not-allowed text-[#fde6b3] border-b-[4px] border-[#92400e] active:border-b-0 active:translate-y-[4px] font-pixelify tracking-widest px-8 py-4 rounded-xl text-xl transition-all shadow-[0_0_20px_rgba(217,119,6,0.4)]">
-                        {!joinInfo ? 'PING FIRST...' : !joinInfo.open ? '🔒 LOBBY CLOSED' : 'JOIN SERVER ➔'}
+                        {!joinInfo ? 'PING FIRST...' : selectedRoleTaken ? 'CHANGE ROLE FIRST' : !joinInfo.open ? '🔒 LOBBY CLOSED' : 'JOIN SERVER ➔'}
                       </button>
                     </div>
                   )}
@@ -954,16 +1014,15 @@ export default function App() {
                   {/* Role slots summary */}
                   <div className="bg-[#2e1d0d] rounded-lg p-2 border border-[#1e1208] text-[10px] font-mono flex flex-col gap-1">
                     <p className="text-[#d4b483] font-black tracking-widest">ROLE SLOTS</p>
-                    <div className="flex gap-3">
-                      <span className={`${
-                        gameState?.players?.some((p: any) => p.name.endsWith('|Wizard'))
-                          ? 'text-[#38bdf8] font-bold' : 'text-[#5c3e21]'
-                      }`}>
-                        🧙 Wizard: {gameState?.players?.some((p: any) => p.name.endsWith('|Wizard')) ? '✅ FILLED' : '⬜ EMPTY'}
-                      </span>
-                      <span className="text-[#f87171] font-bold">
-                        ⚔ Deleters: {gameState?.players?.filter((p: any) => !p.name.endsWith('|Wizard')).length ?? 0}
-                      </span>
+                    <div className="flex gap-3 flex-wrap">
+                      {ROLE_OPTIONS.map((r) => {
+                        const filled = gameState?.players?.some((p: any) => p.name.endsWith(`|${r.value}`));
+                        return (
+                          <span key={r.value} className={filled ? 'text-[#4ade80] font-bold' : 'text-[#5c3e21]'}>
+                            {r.icon} {r.value}: {filled ? '✅ FILLED' : '⬜ EMPTY'}
+                          </span>
+                        );
+                      })}
                     </div>
                   </div>
 
