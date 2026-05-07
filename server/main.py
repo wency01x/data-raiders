@@ -289,14 +289,24 @@ async def websocket_endpoint(ws: WebSocket):
                     continue
                 spell  = msg.get("spell", "")
                 target = msg.get("target_id")
-                result = await cast_spell(player.id, spell, target)
-
-                await bus.send_to(player.id, {
-                    "type": "spell_result",
-                    "player_id": player.id,
-                    "spell": spell,
-                    **result,
-                })
+                try:
+                    result = await cast_spell(player.id, spell, target)
+                    await bus.send_to(player.id, {
+                        "type": "spell_result",
+                        "player_id": player.id,
+                        "spell": spell,
+                        **result,
+                    })
+                except Exception as e:
+                    import traceback
+                    traceback.print_exc()
+                    await bus.send_to(player.id, {
+                        "type": "spell_result",
+                        "player_id": player.id,
+                        "spell": spell,
+                        "success": False,
+                        "message": f"SERVER CRASH: {str(e)}"
+                    })
                 # Spell cast event → enqueued for async broadcast (producer)
                 await bus.enqueue({
                     "type": "spell_cast",
