@@ -4,6 +4,40 @@ import "./index.css";
 import introMusicUrl from './assets/audio/bg-intro-music.mp3';
 import ingameMusicUrl from './assets/audio/bg-ingame-music.mp3';
 
+function CustomSelect({ value, options, onChange, label }: { value: string, options: {value: string, label: string}[], onChange: (val: string) => void, label: string }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const selectedLabel = options.find(o => o.value === value)?.label || value;
+
+  return (
+    <div className="relative">
+      <label className="block text-[10px] font-bold text-[#fde6b3] mb-1 tracking-wider">{label}</label>
+      <div 
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full bg-[#2e1d0d] border-[3px] border-[#1e1208] rounded px-3 py-2 text-sm font-bold text-[#facc15] shadow-inner cursor-pointer flex justify-between items-center"
+      >
+        <span className="truncate whitespace-nowrap">{selectedLabel}</span>
+        <span className="text-[10px] opacity-70 ml-2 shrink-0">▼</span>
+      </div>
+      {isOpen && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
+          <div className="absolute top-[calc(100%+2px)] left-0 min-w-full w-max bg-[#2e1d0d] border-[3px] border-[#1e1208] rounded z-50 overflow-hidden shadow-[0_5px_15px_rgba(0,0,0,0.5)]">
+            {options.map(opt => (
+              <div 
+                key={opt.value}
+                onClick={() => { onChange(opt.value); setIsOpen(false); }}
+                className={`px-3 py-2 text-sm font-bold cursor-pointer transition-colors whitespace-nowrap ${value === opt.value ? 'bg-[#d97706] text-[#1e1208]' : 'text-[#facc15] hover:bg-[#3e240f]'}`}
+              >
+                {opt.label}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function App() {
   type ViewState = 'ENTER' | 'TITLE' | 'LOBBY' | 'LOADING' | 'GAME';
   const [view, setView] = useState<ViewState>('ENTER');
@@ -590,23 +624,25 @@ export default function App() {
             <input type="text" value={playerName} onChange={(e) => setPlayerName(e.target.value)} maxLength={12}
               className="w-full bg-[#2e1d0d] border-[3px] border-[#1e1208] rounded px-3 py-2 text-sm font-mono text-[#4ade80] focus:outline-none focus:border-[#d97706] shadow-inner" />
           </div>
-          <div>
-            <label className="block text-[10px] font-bold text-[#fde6b3] mb-1 tracking-wider">CHARACTER CLASS</label>
-            <select value={playerClass} onChange={(e) => setPlayerClass(e.target.value)}
-              className="w-full bg-[#2e1d0d] border-[3px] border-[#1e1208] rounded px-3 py-2 text-sm font-bold text-[#facc15] focus:outline-none focus:border-[#d97706] shadow-inner cursor-pointer">
-              <option value="Archer">🏹 Archer</option>
-              <option value="Swordsman">⚔️ Swordsman</option>
-              <option value="Wizard">🧙 Wizard</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-[10px] font-bold text-[#fde6b3] mb-1 tracking-wider">GAME MODE</label>
-            <select value={gameMode} onChange={(e) => setGameMode(e.target.value)}
-              className="w-full bg-[#2e1d0d] border-[3px] border-[#1e1208] rounded px-3 py-2 text-sm font-bold text-[#facc15] focus:outline-none focus:border-[#d97706] shadow-inner cursor-pointer">
-              <option value="Standard">⚔️ Multiplayer Dungeon</option>
-              <option value="Speedrun">⏱ Speedrun Mode</option>
-            </select>
-          </div>
+          <CustomSelect
+            label="CHARACTER CLASS"
+            value={playerClass}
+            onChange={setPlayerClass}
+            options={[
+              { value: "Archer", label: "🏹 Archer" },
+              { value: "Swordsman", label: "⚔️ Swordsman" },
+              { value: "Wizard", label: "🧙 Wizard" }
+            ]}
+          />
+          <CustomSelect
+            label="GAME MODE"
+            value={gameMode}
+            onChange={setGameMode}
+            options={[
+              { value: "Standard", label: "⚔️ Multiplayer Dungeon" },
+              { value: "Speedrun", label: "⏱ Speedrun Mode" }
+            ]}
+          />
         </div>
       </div>
     );
@@ -703,7 +739,7 @@ export default function App() {
                         )}
                         {lobbyIsOpen && !amIHost && (
                           <div className="text-center py-2">
-                            <p className="text-[10px] text-[#fca5a5] font-semibold text-center mb-2">🔒 Lobby is already open by another player.</p>
+                            <p className="text-[10px] text-[#fca5a5] font-semibold text-center mb-2"> Lobby is already open by another player.</p>
                             <button
                               onClick={() => { setLobbyMode('join'); setLobbyError(''); setJoinInfo(null); setJoinError(''); }}
                               className="w-full bg-[#0369a1] hover:bg-[#0284c7] active:bg-[#075985] text-white border-b-[4px] border-[#075985] active:border-b-0 active:translate-y-[4px] font-pixelify tracking-widest py-3 rounded-xl text-lg transition-all shadow-[0_0_15px_rgba(3,105,161,0.4)]"
@@ -714,7 +750,7 @@ export default function App() {
                         )}
                         {!lobbyIsOpen && (
                           <>
-                            <p className="text-[10px] text-[#fca5a5] text-center font-semibold">🔒 Lobby is closed — friends cannot join yet.</p>
+                            <p className="text-[10px] text-[#fca5a5] text-center font-semibold"> Lobby is closed — friends cannot join yet.</p>
                             <button
                               onClick={openLobby}
                               disabled={isOpening}
