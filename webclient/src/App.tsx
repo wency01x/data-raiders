@@ -442,6 +442,30 @@ export default function App() {
   const allowedSpells = gameState?.allowed_spells ?? [];
   const enemies = gameState?.enemies?.filter((e: any) => e.alive) ?? [];
   const me = gameState?.players?.find((p: any) => p.id === myId);
+  const currentRole = (me?.name?.split('|')?.[1] || playerClass) as "Archer" | "Swordsman" | "Wizard";
+  const roleTutorial = {
+    Archer: {
+      badge: "🏹 ARCHER",
+      step1: "Welcome, Archer. You are a precision Deleter. Your only combat spell is DELETE, so your job is to remove the exact target rows.",
+      step4: "Your terminal is read-only for query execution. Let the Wizard run SELECT and share intel, then execute your DELETE spell on the correct target.",
+      step5: "Archer controls: press [1] to keep DELETE ready, lock a target, then press [E] to cast. Your power is accuracy, not volume.",
+      step6: "You are ready. Wait for Wizard intel, then cleanly DELETE the required targets to open the portal.",
+    },
+    Swordsman: {
+      badge: "⚔️ SWORDSMAN",
+      step1: "Welcome, Swordsman. You are the data modifier. Your combat spells are INSERT and UPDATE only.",
+      step4: "Your terminal is read-only for query execution. Coordinate with the Wizard for SELECT results, then apply INSERT or UPDATE based on the objective.",
+      step5: "Swordsman controls: use [1]/[2] to switch between INSERT and UPDATE in your role HUD, lock a target when needed, then press [E] to cast.",
+      step6: "You are ready. Use INSERT and UPDATE with discipline to satisfy room logic and support your team.",
+    },
+    Wizard: {
+      badge: "🧙 WIZARD",
+      step1: "Welcome, Wizard. You are the query specialist. You can cast SELECT and JOIN, and you are the only player allowed to run SQL queries.",
+      step4: "This right panel is your command station. Use the terminal to run SELECT queries and broadcast table intel to all players in the lobby.",
+      step5: "Wizard controls: keep SELECT ready, lock enemies, press [E] to inspect, and use JOIN only when room targets are completed to trigger portal progression.",
+      step6: "You are ready. Scout with SELECT, guide your teammates with accurate query intel, then JOIN at the right time.",
+    },
+  }[currentRole === "Wizard" || currentRole === "Swordsman" ? currentRole : "Archer"];
 
   let schemaInfo: any = {};
   try {
@@ -1450,14 +1474,14 @@ export default function App() {
                <div className="w-full h-full bg-[#facc15] flex items-center justify-center text-5xl pb-2">🤖</div>
             </div>
             <div className="flex-1 flex flex-col justify-between h-full py-1 text-center md:text-left">
-              <h3 className="text-2xl font-pixelify text-[#4ade80] tracking-wider mb-2 drop-shadow-md">GUIDE</h3>
+              <h3 className="text-2xl font-pixelify text-[#4ade80] tracking-wider mb-2 drop-shadow-md">GUIDE · {roleTutorial.badge}</h3>
               <p className="text-[#fde6b3] font-bold text-lg md:text-xl leading-relaxed">
-                {tutorialStep === 1 && "Welcome to Data Raiders! I'm here to get you up to speed. Ready?"}
+                {tutorialStep === 1 && roleTutorial.step1}
                 {tutorialStep === 2 && "This is the Game Canvas. Use [W][A][S][D] to move around. If you want to inspect an enemy's data, just click on them with your mouse to lock on!"}
                 {tutorialStep === 3 && "This Left Panel is your Intel Screen! The MISSION OBJECTIVE tells you exactly which enemies you need to eliminate to unlock the portal. The TABLE SCHEMA reveals the exact column names of the database you'll need for your spells!"}
-                {tutorialStep === 4 && "The Right Panel is your weapon—the SQL Terminal! Every enemy here is a row in a real database. To defeat them, you must type SQL commands like 'DELETE FROM table' or 'UPDATE table SET hp=0' and press [Enter]."}
-                {tutorialStep === 5 && "Want a shortcut? You can press keys [1] through [5] to select a quick spell, lock onto an enemy, and press [E] to cast it directly without typing! Check the Logs below the terminal to see the results."}
-                {tutorialStep === 6 && "You are ready! Use your intel, type your spells, and clear the database room. Good luck!"}
+                {tutorialStep === 4 && roleTutorial.step4}
+                {tutorialStep === 5 && roleTutorial.step5}
+                {tutorialStep === 6 && roleTutorial.step6}
               </p>
             </div>
             <div className="flex gap-3 shrink-0 mt-4 md:mt-0">
