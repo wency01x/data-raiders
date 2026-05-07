@@ -416,32 +416,19 @@ async def _spell_update(player_id: str, target_id: int | None) -> dict:
 
 async def _spell_join() -> dict:
     def _do_join():
-        conn = get_connection()
-        try:
+        # Do not use DB queries since game state already tracks the exact targets needed.
+        rem = state.targets_remaining
+        if rem > 0:
             if state.room_number == 3:
-                alive = conn.execute(
-                    f"SELECT COUNT(*) as cnt FROM {state.current_room} WHERE role='Dev' AND salary < 100000"
-                ).fetchone()["cnt"]
-            else:
-                alive = conn.execute(
-                    f"SELECT COUNT(*) as cnt FROM {state.current_room} WHERE alive = 1"
-                ).fetchone()["cnt"]
-                
-            if alive > 0:
-                if state.room_number == 3:
-                    return alive, False, f"JOIN failed — {alive} Devs still need a salary buff!"
-                return alive, False, f"JOIN failed — {alive} enemies still alive!"
-                
-            conn.execute(
-                "UPDATE rooms SET unlocked=1 WHERE id=(SELECT id FROM rooms WHERE unlocked=0 ORDER BY id ASC LIMIT 1)"
-            )
-            conn.commit()
-            return alive, True, "JOIN successful — next room unlocked!"
-        finally:
-            conn.close()
+                return False, f"JOIN failed — {rem} Devs still need a salary buff!"
+            return False, f"JOIN failed — {rem} targets remaining!"
+            
+        return True, "JOIN successful — Portal opened!"
 
     print(f"[ThreadPool] JOIN check dispatched to worker thread.")
-    alive, unlocked, msg = await _run_in_thread(_do_join)
+    unlocked, msg = await _run_in_thread(_do_join)
     if not unlocked:
         return {"success": False, "message": msg}
+        
+    state.room_joined = True
     return {"success": True, "message": msg}
