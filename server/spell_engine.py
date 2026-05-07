@@ -20,6 +20,12 @@ ROAST_MESSAGES = [
     "3 wrong casts? Taking a breather for ya XD",
 ]
 
+ROLE_CASTABLE_SPELLS: dict[str, set[str]] = {
+    "Archer": {"DELETE"},
+    "Swordsman": {"INSERT", "UPDATE"},
+    "Wizard": {"SELECT", "JOIN"},
+}
+
 
 def _record_mistake(player_id: str) -> str | None:
     """
@@ -157,11 +163,12 @@ async def cast_spell(player_id: str, spell: str, target_id: int | None) -> dict:
     player = state.players.get(player_id)
     if player:
         p_class = player.name.split("|")[-1] if "|" in player.name else ""
-        # Wizard (Query Player): can only SELECT. Cannot DELETE, UPDATE, or INSERT.
-        # Deleters (Archer/Swordsman): can SELECT, DELETE, UPDATE, INSERT.
-        # All classes can JOIN (for level progression via CAST E).
-        if spell in ("DELETE", "UPDATE", "INSERT") and p_class == "Wizard":
-            return {"success": False, "message": "ROLE ERROR: The Wizard can only cast SELECT! Let a Deleter (Archer/Swordsman) handle this."}
+        role_spells = ROLE_CASTABLE_SPELLS.get(p_class)
+        if role_spells is None:
+            return {"success": False, "message": "ROLE ERROR: Unknown class. Please rejoin the lobby."}
+        if spell not in role_spells:
+            allowed = ", ".join(sorted(role_spells))
+            return {"success": False, "message": f"ROLE ERROR: {p_class} can only cast: {allowed}."}
 
     if spell == "SELECT":
         result = await _spell_select(player_id, target_id)
