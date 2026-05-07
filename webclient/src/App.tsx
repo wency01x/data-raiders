@@ -237,6 +237,7 @@ export default function App() {
         case "enemy_buffed":
           setAttacks((a) => ({ ...a, ["buff_" + msg.enemy_id]: Date.now() }));
           break;
+        case "lobby_error":
         case "lobby_closed":
           // Server rejected connection — show a clean UI error, not a browser alert
           setShouldConnect(false);
@@ -272,7 +273,8 @@ export default function App() {
         case "query_result":
           setQueryResult(msg);
           if (msg.success) {
-            setMessages((m) => [...m, `📊 ${msg.message}`]);
+            const by = msg.queried_by ? `🧙 ${msg.queried_by} queried` : "📊 Query";
+            setMessages((m) => [...m, `📊 ${by}: ${msg.message}`]);
           } else {
             setMessages((m) => [...m, `❌ ${msg.message}`]);
           }
@@ -416,6 +418,8 @@ export default function App() {
 
   const sendQuery = () => {
     if (!sqlInput.trim() || !ws) return;
+    // Only Wizard can send queries — non-Wizards are blocked client-side too
+    if (playerClass !== 'Wizard') return;
     ws.send(JSON.stringify({ type: "query", sql: sqlInput }));
     setMessages((m) => [...m, `🔍 > ${sqlInput}`]);
     setSqlInput("");
@@ -617,26 +621,59 @@ export default function App() {
       return `${Math.floor(s / 60)}m ${s % 60}s`;
     };
 
-    // Shared player setup block
+    // Derived: is the Wizard role already taken by another connected player?
+    const wizardTakenByOther = gameState?.players?.some(
+      (p: any) => p.name.endsWith('|Wizard') && p.id !== myId
+    ) ?? false;
+
+    // Class options — disable Wizard if already taken by someone else
+    const classOptions = [
+      { value: "Archer",    label: "🏹 Archer (Deleter)" },
+      { value: "Swordsman", label: "⚔️ Swordsman (Deleter)" },
+      { value: "Wizard",    label: wizardTakenByOther ? "🧙 Wizard (TAKEN)" : "🧙 Wizard (Query)" },
+    ];
+
+    // Shared player setup block — class picker locked once connected
     const PlayerSetup = (
       <div className="bg-[#784f2b] border-[3px] border-[#523315] rounded-xl p-4 flex flex-col gap-3">
         <h2 className="text-xs font-black text-[#ffdb7a] tracking-widest">⚔️ PLAYER SETUP</h2>
+
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div>
             <label className="block text-[10px] font-bold text-[#fde6b3] mb-1 tracking-wider">PLAYER NAME</label>
-            <input type="text" value={playerName} onChange={(e) => setPlayerName(e.target.value)} maxLength={12}
-              className="w-full bg-[#2e1d0d] border-[3px] border-[#1e1208] rounded px-3 py-2 text-sm font-mono text-[#4ade80] focus:outline-none focus:border-[#d97706] shadow-inner" />
+            {ws ? (
+              <div className="w-full bg-[#1e1208] border-[3px] border-[#2e1d0d] rounded px-3 py-2 text-sm font-mono text-[#6b4c2a] shadow-inner cursor-not-allowed">
+                {playerName}
+              </div>
+            ) : (
+              <input type="text" value={playerName} onChange={(e) => setPlayerName(e.target.value)} maxLength={12}
+                className="w-full bg-[#2e1d0d] border-[3px] border-[#1e1208] rounded px-3 py-2 text-sm font-mono text-[#4ade80] focus:outline-none focus:border-[#d97706] shadow-inner" />
+            )}
           </div>
-          <CustomSelect
-            label="CHARACTER CLASS"
-            value={playerClass}
-            onChange={setPlayerClass}
-            options={[
-              { value: "Archer", label: "🏹 Archer" },
-              { value: "Swordsman", label: "⚔️ Swordsman" },
-              { value: "Wizard", label: "🧙 Wizard" }
-            ]}
-          />
+          <div className="relative">
+            {ws ? (
+              <div>
+                <label className="block text-[10px] font-bold text-[#fde6b3] mb-1 tracking-wider">CHARACTER CLASS (LOCKED)</label>
+                <div className="w-full bg-[#1e1208] border-[3px] border-[#2e1d0d] rounded px-3 py-2 text-sm font-bold text-[#6b4c2a] shadow-inner cursor-not-allowed flex items-center gap-2">
+                  <span>{playerClass === 'Wizard' ? '🧙' : playerClass === 'Archer' ? '🏹' : '⚔️'}</span>
+                  <span>{playerClass}</span>
+                  <span className="ml-auto text-[9px] bg-[#3e240f] text-[#d97706] px-1.5 py-0.5 rounded font-black tracking-wider">
+                    {playerClass === 'Wizard' ? 'QUERY' : 'DELETER'}
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <CustomSelect
+                label="CHARACTER CLASS"
+                value={playerClass}
+                onChange={(val) => {
+                  if (val === 'Wizard' && wizardTakenByOther) return;
+                  setPlayerClass(val);
+                }}
+                options={classOptions}
+              />
+            )}
+          </div>
           <CustomSelect
             label="GAME MODE"
             value={gameMode}
@@ -872,19 +909,58 @@ export default function App() {
                     <span>CONNECTED RAIDERS ({onlineCount})</span>
                     <button onClick={() => { setWs(null); setShouldConnect(false); window.location.reload(); }} className="text-[#d4b483] hover:text-[#fca5a5] text-[10px]">Disconnect</button>
                   </h2>
-                  <div className="flex flex-col gap-2 flex-1 overflow-y-auto custom-scrollbar pr-2 min-h-[150px]">
-                    {gameState?.players?.map((p: any) => (
-                      <div key={p.id} className="flex items-center gap-3 bg-[#2e1d0d] p-2 rounded-lg border border-[#1e1208]">
-                        <div className={`w-3 h-3 rounded-full ${p.id === myId ? 'bg-[#3b82f6]' : 'bg-[#8b5cf6]'}`}></div>
-                        <span className="font-bold text-[#fde6b3]">{p.name.split('|')[0]}</span>
-                        <span className="text-xs text-[#d4b483] ml-auto">{p.name.split('|')[1] || 'Player'}</span>
-                        {p.id === myId && <span className="text-[10px] bg-[#3b82f6] text-white px-1.5 py-0.5 rounded font-bold">YOU</span>}
-                      </div>
-                    ))}
+
+                  {/* Role coordination panel */}
+                  <div className="flex flex-col gap-1.5">
+                    {gameState?.players?.map((p: any) => {
+                      const pClass = p.name.split('|')[1] || 'Player';
+                      const isWizard = pClass === 'Wizard';
+                      const isMe = p.id === myId;
+                      const isDead = p.lives !== undefined && p.lives <= 0;
+                      return (
+                        <div key={p.id} className={`flex items-center gap-2 p-2 rounded-lg border ${
+                          isMe
+                            ? 'bg-[#1e3a2e] border-[#4ade80]/40'
+                            : 'bg-[#2e1d0d] border-[#1e1208]'
+                        }`}>
+                          <span className="text-base shrink-0">
+                            {isWizard ? '🧙' : pClass === 'Archer' ? '🏹' : '⚔️'}
+                          </span>
+                          <span className={`font-bold text-sm truncate ${ isDead ? 'text-[#ef4444]' : 'text-[#fde6b3]' }`}>
+                            {p.name.split('|')[0]}
+                          </span>
+                          <span className={`ml-auto text-[9px] px-1.5 py-0.5 rounded font-black tracking-wider shrink-0 ${
+                            isWizard
+                              ? 'bg-[#1e3a5f] text-[#38bdf8] border border-[#38bdf8]/40'
+                              : 'bg-[#3b1f1f] text-[#f87171] border border-[#f87171]/40'
+                          }`}>
+                            {isWizard ? '🔍 QUERY' : '⚔ DELETER'}
+                          </span>
+                          {isMe && <span className="text-[9px] bg-[#3b82f6] text-white px-1.5 py-0.5 rounded font-bold shrink-0">YOU</span>}
+                        </div>
+                      );
+                    })}
                   </div>
+
+                  {/* Role slots summary */}
+                  <div className="bg-[#2e1d0d] rounded-lg p-2 border border-[#1e1208] text-[10px] font-mono flex flex-col gap-1">
+                    <p className="text-[#d4b483] font-black tracking-widest">ROLE SLOTS</p>
+                    <div className="flex gap-3">
+                      <span className={`${
+                        gameState?.players?.some((p: any) => p.name.endsWith('|Wizard'))
+                          ? 'text-[#38bdf8] font-bold' : 'text-[#5c3e21]'
+                      }`}>
+                        🧙 Wizard: {gameState?.players?.some((p: any) => p.name.endsWith('|Wizard')) ? '✅ FILLED' : '⬜ EMPTY'}
+                      </span>
+                      <span className="text-[#f87171] font-bold">
+                        ⚔ Deleters: {gameState?.players?.filter((p: any) => !p.name.endsWith('|Wizard')).length ?? 0}
+                      </span>
+                    </div>
+                  </div>
+
                   {lobbyMode === 'create' && (
                     <button onClick={() => ws?.send(JSON.stringify({ type: "start_game" }))}
-                      className="w-full mt-3 bg-[#d97706] hover:bg-[#b45309] active:bg-[#92400e] text-[#fde6b3] border-b-[6px] border-[#92400e] active:border-b-0 active:translate-y-[6px] font-pixelify tracking-widest px-6 py-4 rounded-xl text-3xl transition-all shadow-[0_0_20px_rgba(217,119,6,0.4)]">
+                      className="w-full mt-1 bg-[#d97706] hover:bg-[#b45309] active:bg-[#92400e] text-[#fde6b3] border-b-[6px] border-[#92400e] active:border-b-0 active:translate-y-[6px] font-pixelify tracking-widest px-6 py-4 rounded-xl text-3xl transition-all shadow-[0_0_20px_rgba(217,119,6,0.4)]">
                       START ADVENTURE!
                     </button>
                   )}
@@ -1076,54 +1152,45 @@ export default function App() {
           </div>
         </div>
 
-        {/* Schema Card / Query Results */}
-        {((queryResult && queryResult.success && queryResult.columns?.length > 0) || schemaInfo.columns) && (() => {
-          const showQuery = (queryResult && queryResult.success && queryResult.columns?.length > 0);
-          const columns = showQuery ? queryResult.columns : schemaInfo.columns;
-          const rows = showQuery ? queryResult.rows : (schemaInfo.sample_data || []);
-          return (
-            <div className="bg-[#784f2b] border-[4px] border-[#523315] rounded-xl p-3 flex flex-col shadow-inner overflow-hidden flex-1 min-h-[200px]">
-              <h2 className="text-sm font-black text-[#ffdb7a] tracking-wider mb-2 flex items-center gap-1.5 drop-shadow-sm shrink-0">
-                <span>🗃️</span> {showQuery ? "QUERY RESULT" : "TABLE SCHEMA"}
-              </h2>
-              <div className="bg-[#523315] rounded border-[2px] border-[#3e240f] shadow-inner flex flex-col overflow-hidden h-full">
-                <div className="bg-[#3e240f] border-b-[2px] border-[#2e1d0d] px-3 py-1.5 shrink-0 flex justify-between items-center">
-                  <span className="text-xs font-mono font-bold text-[#fde6b3] drop-shadow-sm">
-                    {schemaInfo.table_name}
-                  </span>
-                  {showQuery && (
-                    <span className="text-[10px] font-bold text-[#facc15]">{rows.length} rows</span>
-                  )}
-                </div>
-                <div className="overflow-auto bg-[#8c5f36]/10 flex-1 custom-scrollbar">
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="border-b-[2px] border-[#3e240f] sticky top-0 bg-[#523315] z-10">
-                        {columns.map((col: string) => (
-                          <th key={col} className="px-2 py-1.5 text-left font-bold text-[#facc15] whitespace-nowrap">{col}</th>
+        {/* Query Results — only shown after Wizard runs a query */}
+        {queryResult && queryResult.success && queryResult.columns?.length > 0 && (
+          <div className="bg-[#784f2b] border-[4px] border-[#523315] rounded-xl p-3 flex flex-col shadow-inner overflow-hidden flex-1 min-h-[200px]">
+            <h2 className="text-sm font-black text-[#ffdb7a] tracking-wider mb-2 flex items-center gap-1.5 drop-shadow-sm shrink-0">
+              <span>🗃️</span> QUERY RESULT
+              {queryResult.queried_by && (
+                <span className="ml-auto text-[9px] text-[#38bdf8] font-bold">🧙 {queryResult.queried_by}</span>
+              )}
+            </h2>
+            <div className="bg-[#523315] rounded border-[2px] border-[#3e240f] shadow-inner flex flex-col overflow-hidden h-full">
+              <div className="bg-[#3e240f] border-b-[2px] border-[#2e1d0d] px-3 py-1.5 shrink-0 flex justify-between items-center">
+                <span className="text-xs font-mono font-bold text-[#fde6b3] drop-shadow-sm">
+                  {schemaInfo.table_name ?? "result"}
+                </span>
+                <span className="text-[10px] font-bold text-[#facc15]">{queryResult.rows.length} rows</span>
+              </div>
+              <div className="overflow-auto bg-[#8c5f36]/10 flex-1 custom-scrollbar">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b-[2px] border-[#3e240f] sticky top-0 bg-[#523315] z-10">
+                      {queryResult.columns.map((col: string) => (
+                        <th key={col} className="px-2 py-1.5 text-left font-bold text-[#facc15] whitespace-nowrap">{col}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {queryResult.rows.map((row: any[], i: number) => (
+                      <tr key={i} className="border-b-[1px] border-[#3e240f]/50 hover:bg-[#3e240f]/30">
+                        {row.map((cell: any, j: number) => (
+                          <td key={j} className="px-2 py-1 font-mono text-[#fde6b3] whitespace-nowrap">{String(cell)}</td>
                         ))}
                       </tr>
-                    </thead>
-                    <tbody>
-                      {rows.map((row: any[], i: number) => (
-                        <tr key={i} className="border-b-[1px] border-[#3e240f]/50 hover:bg-[#3e240f]/30">
-                          {row.map((cell: any, j: number) => (
-                            <td key={j} className="px-2 py-1 font-mono text-[#fde6b3] whitespace-nowrap">{String(cell)}</td>
-                          ))}
-                        </tr>
-                      ))}
-                      {!showQuery && (
-                        <tr>
-                          <td colSpan={columns.length} className="px-2 py-1 text-[#d4b483] text-center italic">...</td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
-          );
-        })()}
+          </div>
+        )}
 
       </div>
 
@@ -1155,26 +1222,46 @@ export default function App() {
         <div className="bg-[#5c3e21] border-[6px] border-[#3e240f] rounded-2xl p-3 flex flex-col shrink-0 shadow-[inset_0_0_10px_rgba(0,0,0,0.5),0_6px_12px_rgba(0,0,0,0.5)]">
           <h2 className="text-sm font-black text-[#4ade80] tracking-wider mb-2 flex items-center gap-1.5 drop-shadow-sm">
             <span></span> TERMINAL
+            {playerClass === 'Wizard' ? (
+              <span className="ml-auto text-[9px] bg-[#1e3a5f] text-[#38bdf8] border border-[#38bdf8]/40 px-1.5 py-0.5 rounded font-black tracking-widest">🔍 QUERY PLAYER</span>
+            ) : (
+              <span className="ml-auto text-[9px] bg-[#3b1f1f] text-[#f87171] border border-[#f87171]/40 px-1.5 py-0.5 rounded font-black tracking-widest">⚔ READ-ONLY</span>
+            )}
           </h2>
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-[#4ade80] font-mono text-xl font-bold">»</span>
-            <input
-              type="text"
-              value={sqlInput}
-              onChange={(e) => setSqlInput(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && sendQuery()}
-              placeholder={`SELECT * FROM ...`}
-              className="flex-1 min-w-0 bg-[#2e1d0d] border-[3px] border-[#1e1208] rounded px-3 py-2 text-sm font-mono text-[#4ade80] placeholder-[#784f2b] focus:outline-none focus:border-[#4ade80] transition-colors shadow-inner"
-            />
-            <button
-              onClick={sendQuery}
-              className="bg-[#d97706] hover:bg-[#b45309] active:bg-[#92400e] text-[#fde6b3] border-b-[4px] border-[#92400e] active:border-b-0 active:translate-y-[4px] font-black tracking-wider px-3 py-2 rounded-lg text-sm transition-all focus:outline-none"
-            >
-              RUN
-            </button>
-          </div>
+
+          {playerClass !== 'Wizard' ? (
+            /* Non-Wizard locked view */
+            <div className="bg-[#2e1d0d] border-2 border-[#3e240f] rounded-lg px-3 py-4 flex flex-col items-center gap-2 text-center">
+              <span className="text-2xl">🧙</span>
+              <p className="text-[#d4b483] text-xs font-bold tracking-wide">Only the <span className="text-[#38bdf8]">Wizard</span> can query the database.</p>
+              <p className="text-[#6b4c2a] text-[10px]">Your Wizard teammate's results will appear here when they run a query.</p>
+            </div>
+          ) : (
+            /* Wizard active input */
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-[#4ade80] font-mono text-xl font-bold">»</span>
+              <input
+                type="text"
+                value={sqlInput}
+                onChange={(e) => setSqlInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && sendQuery()}
+                placeholder={`SELECT * FROM ...`}
+                className="flex-1 min-w-0 bg-[#2e1d0d] border-[3px] border-[#1e1208] rounded px-3 py-2 text-sm font-mono text-[#4ade80] placeholder-[#784f2b] focus:outline-none focus:border-[#4ade80] transition-colors shadow-inner"
+              />
+              <button
+                onClick={sendQuery}
+                className="bg-[#d97706] hover:bg-[#b45309] active:bg-[#92400e] text-[#fde6b3] border-b-[4px] border-[#92400e] active:border-b-0 active:translate-y-[4px] font-black tracking-wider px-3 py-2 rounded-lg text-sm transition-all focus:outline-none"
+              >
+                RUN
+              </button>
+            </div>
+          )}
+
           {queryResult && !queryResult.success && (
             <p className="text-xs text-red-400 font-mono mt-1">Error: {queryResult.message}</p>
+          )}
+          {queryResult?.success && queryResult.queried_by && playerClass !== 'Wizard' && (
+            <p className="text-[10px] text-[#38bdf8] font-bold mt-1">🧙 Intel from {queryResult.queried_by}</p>
           )}
         </div>
 
