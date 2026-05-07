@@ -225,6 +225,20 @@ async def websocket_endpoint(ws: WebSocket):
         if msg.get("type") != "join":
             return
         player_name = msg.get("player_name", "Anonymous")
+        
+        # Enforce One Wizard Rule
+        is_wizard = player_name.endswith("|Wizard")
+        if is_wizard:
+            async with state.lock:
+                has_wizard = any(p.name.endswith("|Wizard") for p in state.players.values())
+            if has_wizard:
+                await ws.send_json({
+                    "type": "lobby_error",
+                    "message": "The Wizard role is already taken! Please pick another class.",
+                })
+                await ws.close()
+                return
+                
     except (WebSocketDisconnect, Exception):
         return
 
@@ -319,6 +333,19 @@ async def websocket_endpoint(ws: WebSocket):
                 if player.hp <= 0:
                     continue
                 sql = msg.get("sql", "").strip().rstrip(";").strip()
+
+                # Role check: only the Wizard (Query Player) may run SELECT queries
+                p_class = player.name.split("|")[-1] if "|" in player.name else ""
+                if p_class != "Wizard":
+                    await bus.send_to(player.id, {
+                        "type": "query_result",
+                        "success": False,
+                        "message": "ROLE ERROR: Only the Wizard (Query Player) can query the database! Ask your Wizard teammate to SELECT.",
+                        "columns": [],
+                        "rows": [],
+                    })
+                    continue
+
                 if not sql:
                     await bus.send_to(player.id, {
                         "type": "query_result",
@@ -343,13 +370,16 @@ async def websocket_endpoint(ws: WebSocket):
                         columns = [desc[0] for desc in cursor.description] if cursor.description else []
                         result_rows = [list(row) for row in rows]
                         total = conn.execute(f"SELECT COUNT(*) FROM ({sql})").fetchone()[0]
-                        await bus.send_to(player.id, {
+                        result_payload = {
                             "type": "query_result",
                             "success": True,
-                            "message": f"Query returned {total} row(s)" + (f" (showing first 20)" if total > 20 else ""),
+                            "message": f"[WIZARD] Query returned {total} row(s)" + (f" (showing first 20)" if total > 20 else ""),
                             "columns": columns,
                             "rows": result_rows,
-                        })
+                            "queried_by": player.name.split("|")[0],
+                        }
+                        # Broadcast to ALL players so everyone sees the Wizard's intel
+                        await bus.enqueue(result_payload)
                         await state.add_score(player.id, 5)
                     except Exception as e:
                         await bus.send_to(player.id, {
