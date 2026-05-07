@@ -429,6 +429,35 @@ export default function GameCanvas({ ws, gameState, myId, attacks, onRequestQuit
             ctx.lineWidth = 2.5; ctx.strokeStyle = borderCol; ctx.stroke();
           }
 
+          const buffTime = atkRef.current["buff_" + e.id] || 0;
+          const timeSinceBuff = Date.now() - buffTime;
+          const isBuffed = e.buffed;
+          
+          if (isBuffed) {
+             // Draw golden aura
+             ctx.beginPath();
+             ctx.arc(e.x + TILE/2, e.y + TILE/2 - 8, TILE * 0.8, 0, Math.PI*2);
+             ctx.fillStyle = "rgba(250, 204, 21, 0.25)"; // gold
+             ctx.fill();
+          }
+
+          if (timeSinceBuff > 0 && timeSinceBuff < 2000) {
+             // Level Up Animation
+             const animProgress = timeSinceBuff / 2000;
+             const ringRadius = TILE * 1.5 * animProgress;
+             ctx.beginPath();
+             ctx.arc(e.x + TILE/2, e.y + TILE/2 - 8, ringRadius, 0, Math.PI*2);
+             ctx.strokeStyle = `rgba(250, 204, 21, ${1 - animProgress})`;
+             ctx.lineWidth = 4;
+             ctx.stroke();
+
+             const textYOffset = animProgress * 40;
+             ctx.fillStyle = `rgba(250, 204, 21, ${1 - animProgress})`;
+             ctx.font = "bold 16px 'Pixelify Sans', 'Segoe UI', sans-serif";
+             ctx.textAlign = "center";
+             ctx.fillText("BUFFED!", e.x + TILE / 2, e.y - 20 - textYOffset);
+          }
+
           // Name label above
           ctx.fillStyle = "#e2e8f0";
           ctx.font = "bold 11px 'Segoe UI', sans-serif";
@@ -439,7 +468,7 @@ export default function GameCanvas({ ws, gameState, myId, attacks, onRequestQuit
           const ex = e.x + 4, ey = e.y + 4, ew = TILE - 8;
           const ratio = Math.max(0, e.hp / Math.max(1, e.max_hp));
           const bx = ex + 2, by = ey + ew - 7, bw = ew - 4;
-          const hpCol = "#ef4444"; // Same color for everyone to hide identity
+          const hpCol = isBuffed ? "#facc15" : "#ef4444"; // Gold if buffed
           ctx.fillStyle = "#1e293b";
           rrect(ctx, bx, by, bw, 5, 2); ctx.fill();
           ctx.fillStyle = hpCol;
