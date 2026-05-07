@@ -240,6 +240,7 @@ def init_db():
                 "columns": ["id", "name", "weakness", "phase"],
                 "sample_data": [
                     [1, "CORRUPT_INDEX", "???", 1],
+                    [2, "BACKUP_NODE", "UNKNOWN", 1],
                 ]
             }),
             "TIP: Each phase requires a different spell. Follow the order!",
