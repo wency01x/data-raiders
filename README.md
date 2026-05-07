@@ -1,6 +1,6 @@
 # Data Raiders
 
-Data Raiders is an interactive dungeon crawler where players navigate challenges using a robust dependency-based SQL deletion mechanic with HP penalties to overcome obstacles and enemies. The game features a real-time multiplayer backend, a classic Pygame client, and a modern, high-fidelity React web interface.
+Data Raiders is an interactive Dungeon Crawler where players navigate challenges using a robust dependency-based SQL deletion mechanic with HP penalties to overcome obstacles and enemies. The game features a real-time multiplayer backend, a classic Pygame client, and a modern, high-fidelity React web interface.
 
 *Note: This is a Parallel Distributed Computing project FINAL PIT for its course.*
 
