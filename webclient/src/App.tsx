@@ -234,6 +234,9 @@ export default function App() {
             setAttacks((a) => ({ ...a, [msg.player_id]: Date.now() }));
           }
           break;
+        case "enemy_buffed":
+          setAttacks((a) => ({ ...a, ["buff_" + msg.enemy_id]: Date.now() }));
+          break;
         case "lobby_closed":
           // Server rejected connection — show a clean UI error, not a browser alert
           setShouldConnect(false);
