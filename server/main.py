@@ -65,6 +65,10 @@ def _load_room(table: str):
     state.load_room_info(room_row)
 
 
+import random
+import math
+from shared.constants import TICK_RATE, MAP_COLS, MAP_ROWS, TILE_SIZE
+
 async def _game_tick_loop():
     """
     Game state synchronization loop.
@@ -73,8 +77,29 @@ async def _game_tick_loop():
     position, HP, and event data on every tick.
     """
     interval = 1.0 / TICK_RATE
+    boss_tx, boss_ty = None, None
+    boss_speed = 60.0
+    
     while True:
         await asyncio.sleep(interval)
+        
+        # Room 5 Boss Roaming Logic
+        async with state.lock:
+            if state.room_number == 5 and state.game_phase == "PLAYING":
+                boss = next((e for e in state.enemies.values() if e.alive), None)
+                if boss:
+                    if boss_tx is None or math.hypot(boss.x - boss_tx, boss.y - boss_ty) < 10:
+                        boss_tx = random.uniform(2 * TILE_SIZE, (MAP_COLS - 4) * TILE_SIZE)
+                        boss_ty = random.uniform(2 * TILE_SIZE, (MAP_ROWS - 4) * TILE_SIZE)
+                    
+                    dx = boss_tx - boss.x
+                    dy = boss_ty - boss.y
+                    dist = math.hypot(dx, dy)
+                    if dist > 0:
+                        move_dist = min(dist, boss_speed * interval)
+                        boss.x += (dx / dist) * move_dist
+                        boss.y += (dy / dist) * move_dist
+
         if bus.player_count > 0:
             await bus.broadcast(state.snapshot())
 
