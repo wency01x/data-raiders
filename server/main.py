@@ -19,6 +19,7 @@ from shared.constants import TICK_RATE
 _start_time = time.time()
 _lobby_open: bool = False    # Host must explicitly open the lobby before anyone can join
 _game_started: bool = False  # Set to True when host clicks START ADVENTURE; reset when all leave
+VALID_ROLES = {"Archer", "Swordsman", "Wizard"}
 
 
 @asynccontextmanager
@@ -151,12 +152,22 @@ def _get_local_ip() -> str:
         return "127.0.0.1"
 
 
+def _extract_role(player_name: str) -> str:
+    if "|" not in player_name:
+        return ""
+    return player_name.split("|")[-1].strip()
+
+
 @app.get("/lobby")
 async def get_lobby():
     """
     Returns lobby-level server info. Clients poll this before connecting.
     'open' indicates whether the host has opened the lobby for players.
     """
+    async with state.lock:
+        players = [p.name for p in state.players.values()]
+    taken_roles = sorted({r for r in (_extract_role(name) for name in players) if r})
+
     return JSONResponse({
         "server_ip": _get_local_ip(),
         "port": 8000,
@@ -166,6 +177,8 @@ async def get_lobby():
         "open": _lobby_open,
         "started": _game_started,
         "status": "open" if _lobby_open else "closed",
+        "players": players,
+        "taken_roles": taken_roles,
     })
 
 
@@ -225,19 +238,29 @@ async def websocket_endpoint(ws: WebSocket):
         if msg.get("type") != "join":
             return
         player_name = msg.get("player_name", "Anonymous")
-        
-        # Enforce One Wizard Rule
-        is_wizard = player_name.endswith("|Wizard")
-        if is_wizard:
-            async with state.lock:
-                has_wizard = any(p.name.endswith("|Wizard") for p in state.players.values())
-            if has_wizard:
-                await ws.send_json({
-                    "type": "lobby_error",
-                    "message": "The Wizard role is already taken! Please pick another class.",
-                })
-                await ws.close()
-                return
+        chosen_role = _extract_role(player_name)
+
+        if chosen_role not in VALID_ROLES:
+            await ws.send_json({
+                "type": "lobby_error",
+                "message": "Unable to join lobby with the selected role. Please change role and try again.",
+                "change_role_required": True,
+            })
+            await ws.close()
+            return
+
+        async with state.lock:
+            taken_roles = {
+                r for r in (_extract_role(p.name) for p in state.players.values()) if r
+            }
+        if chosen_role in taken_roles:
+            await ws.send_json({
+                "type": "lobby_error",
+                "message": "Unable to join lobby with the selected role. Please change role and try again.",
+                "change_role_required": True,
+            })
+            await ws.close()
+            return
                 
     except (WebSocketDisconnect, Exception):
         return
