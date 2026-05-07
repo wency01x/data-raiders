@@ -108,6 +108,8 @@ def _check_room3(enemy_extra: dict, spell: str) -> tuple[bool, str]:
     """Room 3: UPDATE only rows WHERE role = 'Dev'"""
     if spell == "UPDATE":
         if enemy_extra.get("role") == "Dev":
+            if enemy_extra.get("buffed"):
+                return False, "This Developer is already fully buffed!"
             return True, "Correct! Updated a Dev's salary."
         else:
             return False, f"WRONG TARGET! This employee's role is '{enemy_extra.get('role')}', not 'Dev'. -1 HP"
@@ -149,7 +151,7 @@ async def cast_spell(player_id: str, spell: str, target_id: int | None) -> dict:
             "message": f"🔕 Cooldown! Calm down and think for {remaining:.1f}s more... XD",
         }
 
-    if spell not in state.allowed_spells and spell != "SELECT":
+    if spell not in state.allowed_spells and spell not in ("SELECT", "JOIN"):
         return {"success": False, "message": f"Spell {spell} not available in this room! Allowed: {', '.join(state.allowed_spells)}"}
 
     if spell == "SELECT":
@@ -391,20 +393,23 @@ async def _spell_update(player_id: str, target_id: int | None) -> dict:
     await state.add_score(player_id, 15)
 
     if room_num == 3 and new_hp <= 1:
-        def _kill_dev():
+        def _buff_dev():
             conn = get_connection()
             try:
-                conn.execute(f"UPDATE {room} SET hp=0, alive=0 WHERE id=?", (target_id,))
+                conn.execute(f"UPDATE {room} SET hp=max_hp, salary=100000 WHERE id=?", (target_id,))
                 conn.commit()
             finally:
                 conn.close()
 
-        await _run_in_thread(_kill_dev)
+        await _run_in_thread(_buff_dev)
         async with state.lock:
             if target_id in state.enemies:
-                state.enemies[target_id].alive = False
-                state.enemies[target_id].hp = 0
-        return {"success": True, "message": f"UPDATE complete on [{row['label']}]! Record updated and cleared. +15 pts", "affected_id": target_id}
+                state.enemies[target_id].hp = state.enemies[target_id].max_hp
+                state.enemies[target_id].extra["buffed"] = True
+                state.enemies[target_id].extra["salary"] = 100000
+        
+        await bus.enqueue({"type": "enemy_buffed", "enemy_id": target_id})
+        return {"success": True, "message": f"UPDATE complete on [{row['label']}]! Salary buffed! +15 pts", "affected_id": target_id}
 
     return {"success": True, "message": f"UPDATE weakened [{row['label']}] to {new_hp} HP. +15 pts", "affected_id": target_id}
 
@@ -413,21 +418,30 @@ async def _spell_join() -> dict:
     def _do_join():
         conn = get_connection()
         try:
-            alive = conn.execute(
-                f"SELECT COUNT(*) as cnt FROM {state.current_room} WHERE alive = 1"
-            ).fetchone()["cnt"]
+            if state.room_number == 3:
+                alive = conn.execute(
+                    f"SELECT COUNT(*) as cnt FROM {state.current_room} WHERE role='Dev' AND salary < 100000"
+                ).fetchone()["cnt"]
+            else:
+                alive = conn.execute(
+                    f"SELECT COUNT(*) as cnt FROM {state.current_room} WHERE alive = 1"
+                ).fetchone()["cnt"]
+                
             if alive > 0:
-                return alive, False
+                if state.room_number == 3:
+                    return alive, False, f"JOIN failed — {alive} Devs still need a salary buff!"
+                return alive, False, f"JOIN failed — {alive} enemies still alive!"
+                
             conn.execute(
                 "UPDATE rooms SET unlocked=1 WHERE id=(SELECT id FROM rooms WHERE unlocked=0 ORDER BY id ASC LIMIT 1)"
             )
             conn.commit()
-            return alive, True
+            return alive, True, "JOIN successful — next room unlocked!"
         finally:
             conn.close()
 
     print(f"[ThreadPool] JOIN check dispatched to worker thread.")
-    alive, unlocked = await _run_in_thread(_do_join)
+    alive, unlocked, msg = await _run_in_thread(_do_join)
     if not unlocked:
-        return {"success": False, "message": f"JOIN failed — {alive} enemies still alive!"}
-    return {"success": True, "message": "JOIN successful — next room unlocked!"}
+        return {"success": False, "message": msg}
+    return {"success": True, "message": msg}
