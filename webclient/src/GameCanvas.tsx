@@ -12,6 +12,11 @@ import slime2Idle from './assets/mobs/PNG/Slime2/Without_shadow/Slime2_Idle_with
 import slime2Atk  from './assets/mobs/PNG/Slime2/Without_shadow/Slime2_Attack_without_shadow.png';
 import slime3Idle from './assets/mobs/PNG/Slime3/Without_shadow/Slime3_Idle_without_shadow.png';
 import slime3Atk  from './assets/mobs/PNG/Slime3/Without_shadow/Slime3_Attack_without_shadow.png';
+import bossWalk1 from './assets/sprite-boss/sprite-gengar-walk-1.png';
+import bossWalk2 from './assets/sprite-boss/sprite-gengar-walk-2.png';
+import bossWalk3 from './assets/sprite-boss/sprite-gengar-walk-3.png';
+import bossWalk4 from './assets/sprite-boss/sprite-gengar-walk-4.png';
+import bossWalk5 from './assets/sprite-boss/sprite-gengar-walk-5.png';
 
 import bgTileSrc from './assets/background/1 Tiles/FieldsTile_38.png';
 import stone1Src from './assets/background/2 Objects/4 Stone/1.png';
@@ -95,8 +100,15 @@ const CHAR_CLASSES = ['Archer', 'Swordsman', 'Wizard'];
 /* ── Slime sprites & Environment ─────────────────────────────────── */
 const SLIME_SPRITES: Record<string, HTMLImageElement> = {};
 const ENV_SPRITES: Record<string, HTMLImageElement> = {};
+let BOSS_SPRITES: HTMLImageElement[] = [];
 
 if (typeof window !== "undefined") {
+  const bossSrcs = [bossWalk1, bossWalk2, bossWalk3, bossWalk4, bossWalk5];
+  bossSrcs.forEach(src => {
+    const img = new Image();
+    img.src = src;
+    BOSS_SPRITES.push(img);
+  });
   const slimeLoads: [string, string][] = [
     ['slime1Idle', slime1Idle], ['slime1Atk', slime1Atk],
     ['slime2Idle', slime2Idle], ['slime2Atk', slime2Atk],
@@ -336,10 +348,10 @@ export default function GameCanvas({ ws, gameState, myId, attacks, onRequestQuit
       ctx.strokeRect(0, 0, COLS * TILE, ROWS * TILE);
 
       if (gs) {
-        const isCleared = gs.room_cleared ?? false;
+        const isJoined = gs.room_joined ?? false;
 
         /* ── PORTAL ───────────────────────────────────────── */
-        if (isCleared) {
+        if (isJoined) {
           const portX = 13 * TILE, portY = 5 * TILE;
           const pS = TILE * 2;
           if (portalImg.current) {
@@ -412,12 +424,30 @@ export default function GameCanvas({ ws, gameState, myId, attacks, onRequestQuit
           const atkImg  = SLIME_SPRITES[`slime${slimeType}Atk`];
           const spriteImg = isBeingHit && atkImg ? atkImg : idleImg;
 
-          const spriteSize = TILE * 2.25;
+          const isBoss = gs.room_number === 5;
+          const spriteSize = isBoss ? TILE * 4 : TILE * 2.25;
           const sdx = e.x + (TILE - spriteSize) / 2;
-          const sdy = e.y + (TILE - spriteSize) / 2 - 16;
+          const sdy = e.y + (TILE - spriteSize) / 2 - (isBoss ? 40 : 16);
           const frameIdx = Math.floor(Date.now() / 120);
 
-          const drawn = spriteImg ? drawSlimeFrame(ctx, spriteImg, frameIdx, sdx, sdy, spriteSize, spriteSize) : false;
+          let drawn = false;
+          if (isBoss && BOSS_SPRITES.length > 0) {
+              const currentBossImg = BOSS_SPRITES[frameIdx % BOSS_SPRITES.length];
+              if (currentBossImg && currentBossImg.complete) {
+                  // Pulse the boss if being hit
+                  ctx.save();
+                  if (isBeingHit) {
+                     ctx.filter = "brightness(2) sepia(1) hue-rotate(-50deg) saturate(5)";
+                  }
+                  // Make the boss bounce slightly
+                  const bounceY = Math.sin(Date.now() / 150) * 10;
+                  ctx.drawImage(currentBossImg, sdx, sdy + bounceY, spriteSize, spriteSize);
+                  ctx.restore();
+                  drawn = true;
+              }
+          } else {
+              drawn = spriteImg ? drawSlimeFrame(ctx, spriteImg, frameIdx, sdx, sdy, spriteSize, spriteSize) : false;
+          }
 
           // Fallback: draw colored box if sprite not ready
           if (!drawn) {
