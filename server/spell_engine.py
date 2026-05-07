@@ -350,13 +350,14 @@ async def _spell_update(player_id: str, target_id: int | None) -> dict:
                 ).fetchone()
                 if not row:
                     return None, None, None
+                row_dict = dict(row)
                 # Room 5 boss phase 2 → 3
                 if room_num == 5:
-                    return row, row["hp"], "boss_check"
-                new_hp = max(1, row["hp"] // 2)
+                    return row_dict, row_dict["hp"], "boss_check"
+                new_hp = max(1, row_dict["hp"] // 2)
                 conn.execute(f"UPDATE {room} SET hp=? WHERE id=?", (new_hp, target_id))
                 conn.commit()
-                return row, new_hp, "normal"
+                return row_dict, new_hp, "normal"
             finally:
                 conn.close()
 
@@ -367,24 +368,28 @@ async def _spell_update(player_id: str, target_id: int | None) -> dict:
         return {"success": False, "message": "Target not found."}
 
     if mode == "boss_check":
+        success = False
+        boss_hp = 0
         async with state.lock:
             e = state.enemies.get(target_id)
             if e and e.extra.get("phase") == 2:
                 e.extra["phase"] = 3
                 boss_hp = max(1, row["hp"] // 3)
                 e.hp = boss_hp
+                success = True
 
-                def _boss_update():
-                    conn = get_connection()
-                    try:
-                        conn.execute(f"UPDATE {room} SET hp=?, phase=3 WHERE id=?", (boss_hp, target_id))
-                        conn.commit()
-                    finally:
-                        conn.close()
+        if success:
+            def _boss_update():
+                conn = get_connection()
+                try:
+                    conn.execute(f"UPDATE {room} SET hp=?, phase=3 WHERE id=?", (boss_hp, target_id))
+                    conn.commit()
+                finally:
+                    conn.close()
 
-                await _run_in_thread(_boss_update)
-                await state.add_score(player_id, 30)
-                return {"success": True, "message": f"UPDATE exploited weakness! Boss weakened to {boss_hp} HP! Use DELETE to finish! +30 pts", "affected_id": target_id}
+            await _run_in_thread(_boss_update)
+            await state.add_score(player_id, 30)
+            return {"success": True, "message": f"UPDATE exploited weakness! Boss weakened to {boss_hp} HP! Use DELETE to finish! +30 pts", "affected_id": target_id}
 
     # Normal UPDATE path
     async with state.lock:
