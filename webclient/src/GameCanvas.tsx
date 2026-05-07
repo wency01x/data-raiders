@@ -80,6 +80,10 @@ const SPELL_COLORS: Record<string, string> = {
 };
 const SPELLS = ["SELECT", "DELETE", "INSERT", "UPDATE", "JOIN"] as const;
 
+// Role-based spell permissions
+const WIZARD_SPELLS  = new Set(["SELECT", "JOIN"]);
+const DELETER_SPELLS = new Set(["SELECT", "DELETE", "INSERT", "UPDATE", "JOIN"]);
+
 /* ── Character sprites ────────────────────────────────────────── */
 const SPRITES: Record<string, HTMLImageElement> = {};
 const SPRITES_ATK: Record<string, HTMLImageElement> = {};
@@ -211,6 +215,28 @@ export default function GameCanvas({ ws, gameState, myId, attacks, onRequestQuit
   const idRef = useRef<string | null>(null);
   useEffect(() => { idRef.current = myId; }, [myId]);
 
+  // Derive own player class from game state
+  const myClass = gameState?.players?.find((p: any) => p.id === myId)?.name?.split('|')?.[1] || '';
+  const isWizard = myClass === 'Wizard';
+  const allowedSpells = isWizard ? WIZARD_SPELLS : DELETER_SPELLS;
+
+  // Filter SPELLS list to only show role-permitted spells in the HUD
+  const visibleSpells = SPELLS.filter(s => allowedSpells.has(s));
+
+  // Refs so the keyboard useEffect closure (runs once) always reads fresh values
+  const isWizardRef = useRef(isWizard);
+  const visibleSpellsRef = useRef(visibleSpells);
+  useEffect(() => { isWizardRef.current = isWizard; }, [isWizard]);
+  useEffect(() => { visibleSpellsRef.current = visibleSpells; }, [visibleSpells]);
+
+  // Auto-correct active spell if current selection is not allowed for this role
+  useEffect(() => {
+    if (myClass && !allowedSpells.has(spell)) {
+      setSpell(isWizard ? "SELECT" : "DELETE");
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [myClass]);
+
   const atkRef = useRef<Record<string, number>>({});
   useEffect(() => { atkRef.current = attacks; }, [attacks]);
 
@@ -225,7 +251,12 @@ export default function GameCanvas({ ws, gameState, myId, attacks, onRequestQuit
       if ((e.target as HTMLElement)?.tagName === "INPUT") return;
       keys.current[e.key.toLowerCase()] = true;
 
-      if (e.key >= "1" && e.key <= "5") setSpell(SPELLS[+e.key - 1]);
+      if (e.key >= "1" && e.key <= "5") {
+        // Map key to role-visible spells only
+        const idx = +e.key - 1;
+        const targetSpell = visibleSpellsRef.current[idx];
+        if (targetSpell) setSpell(targetSpell);
+      }
 
       if (e.key.toLowerCase() === "e" && wsRef.current?.readyState === WebSocket.OPEN) {
         let tid = lockedTargetRef.current;
@@ -234,7 +265,11 @@ export default function GameCanvas({ ws, gameState, myId, attacks, onRequestQuit
           if (!tgt || !tgt.alive) tid = null;
         }
         if (tid == null) tid = nearestEnemy(gsRef.current, idRef.current);
-        wsRef.current.send(JSON.stringify({ type: "spell", spell: spellRef.current, target_id: tid }));
+        // Wizards can only cast SELECT (the server enforces this too, but we enforce client-side)
+        const spellToCast = isWizardRef.current && spellRef.current !== "JOIN"
+          ? "SELECT"
+          : spellRef.current;
+        wsRef.current.send(JSON.stringify({ type: "spell", spell: spellToCast, target_id: tid }));
       }
       if (e.key.toLowerCase() === "r" && wsRef.current?.readyState === WebSocket.OPEN) {
         wsRef.current.send(JSON.stringify({ type: "reset" }));
@@ -637,22 +672,43 @@ export default function GameCanvas({ ws, gameState, myId, attacks, onRequestQuit
       ctx.beginPath(); ctx.moveTo(0, hudY); ctx.lineTo(W, hudY); ctx.stroke();
 
       let sx = 14;
-      for (let i = 0; i < SPELLS.length; i++) {
-        const sp = SPELLS[i];
+      for (let i = 0; i < visibleSpells.length; i++) {
+        const sp = visibleSpells[i];
         const active = sp === currentSpell;
         const col = SPELL_COLORS[sp];
-        rrect(ctx, sx, hudY + 10, 86, 30, 6);
-        ctx.fillStyle = active ? col : "#523315"; // wooden inactive btn
+        const label = sp === "JOIN" ? `[E] JOIN (next lvl)` : `[${i + 1}] ${sp}`;
+        const btnW = sp === "JOIN" ? 110 : 86;
+        rrect(ctx, sx, hudY + 10, btnW, 30, 6);
+        ctx.fillStyle = active ? col : "#523315";
         ctx.fill();
-        ctx.strokeStyle = active ? col : "#2e1d0d"; // wooden edge
+        ctx.strokeStyle = active ? col : "#2e1d0d";
         ctx.lineWidth = active ? 3 : 2;
         ctx.stroke();
-        ctx.fillStyle = active ? "#fff" : "#d4b483"; // cream inactive text
-        ctx.font = "bold 12px 'Segoe UI', sans-serif";
+        ctx.fillStyle = active ? "#fff" : "#d4b483";
+        ctx.font = "bold 11px 'Segoe UI', sans-serif";
         ctx.textAlign = "center";
-        ctx.fillText(`[${i + 1}] ${sp}`, sx + 43, hudY + 30);
-        sx += 92;
+        ctx.fillText(label, sx + btnW / 2, hudY + 30);
+        sx += btnW + 6;
       }
+
+      // Role badge in HUD
+      const roleBadgeX = sx + 6;
+      const roleLabel = isWizard ? "🔍 QUERY" : "⚔ DELETER";
+      const roleColor = isWizard ? "#38bdf8" : "#f87171";
+      const roleBg    = isWizard ? "rgba(30,58,95,0.9)" : "rgba(59,31,31,0.9)";
+      ctx.fillStyle = roleBg;
+      rrect(ctx, roleBadgeX, hudY + 10, 88, 30, 6);
+      ctx.fill();
+      ctx.strokeStyle = roleColor;
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.fillStyle = roleColor;
+      ctx.font = "bold 10px 'Segoe UI', sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(roleLabel, roleBadgeX + 44, hudY + 28);
+      ctx.font = "bold 8px 'Segoe UI', sans-serif";
+      ctx.fillStyle = "rgba(255,255,255,0.5)";
+      ctx.fillText(myClass || "PLAYER", roleBadgeX + 44, hudY + 18);
 
       // Target info
       if (tid != null && gs) {
