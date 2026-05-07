@@ -437,6 +437,15 @@ export default function App() {
   try {
     schemaInfo = JSON.parse(gameState?.schema_info ?? "{}");
   } catch { schemaInfo = {}; }
+  const schemaColumns = Array.isArray(schemaInfo?.columns) ? schemaInfo.columns : [];
+  const schemaSampleRows = Array.isArray(schemaInfo?.sample_data) ? schemaInfo.sample_data : [];
+  const schemaPreviewRows = schemaSampleRows
+    .filter((row: any) => Array.isArray(row))
+    .slice(0, 2)
+    .map((row: any[]) => schemaColumns.map((_: any, i: number) => row[i] ?? "NULL"));
+  while (schemaPreviewRows.length < 2 && schemaColumns.length > 0) {
+    schemaPreviewRows.push(schemaColumns.map(() => "—"));
+  }
 
   useEffect(() => {
     setQueryResult(null);
@@ -1150,6 +1159,42 @@ export default function App() {
               </span>
             ))}
           </div>
+        </div>
+
+        {/* Table Schema Preview */}
+        <div className="bg-[#784f2b] border-[4px] border-[#523315] rounded-xl p-3 shadow-inner shrink-0">
+          <h2 className="text-sm font-black text-[#ffdb7a] tracking-wider mb-2 flex items-center gap-1.5 drop-shadow-sm">
+            <span></span> TABLE SCHEMA
+          </h2>
+          <div className="bg-[#523315] rounded border-[2px] border-[#3e240f] shadow-inner overflow-hidden">
+            <div className="bg-[#3e240f] border-b-[2px] border-[#2e1d0d] px-3 py-1.5 flex justify-between items-center">
+              <span className="text-xs font-mono font-bold text-[#fde6b3]">{schemaInfo.table_name ?? roomName}</span>
+              <span className="text-[10px] font-bold text-[#facc15]">preview</span>
+            </div>
+            <div className="overflow-auto custom-scrollbar">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b-[2px] border-[#3e240f] bg-[#523315]">
+                    {schemaColumns.map((col: string) => (
+                      <th key={col} className="px-2 py-1.5 text-left font-bold text-[#facc15] whitespace-nowrap">{col}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {schemaPreviewRows.map((row: any[], i: number) => (
+                    <tr key={i} className="border-b-[1px] border-[#3e240f]/50">
+                      {row.map((cell: any, j: number) => (
+                        <td key={j} className="px-2 py-1 font-mono text-[#fde6b3] whitespace-nowrap">{String(cell)}</td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <p className="text-[10px] text-[#fde6b3]/70 mt-2 font-semibold">
+            Preview shows 2 rows. Full live table appears after a successful Wizard query.
+          </p>
         </div>
 
         {/* Query Results — only shown after Wizard runs a query */}
