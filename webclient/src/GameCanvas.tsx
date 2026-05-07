@@ -79,10 +79,17 @@ const SPELL_COLORS: Record<string, string> = {
   JOIN:   "#8b5cf6",
 };
 const SPELLS = ["SELECT", "DELETE", "INSERT", "UPDATE", "JOIN"] as const;
-
-// Role-based spell permissions
-const WIZARD_SPELLS  = new Set(["SELECT", "JOIN"]);
-const DELETER_SPELLS = new Set(["SELECT", "DELETE", "INSERT", "UPDATE", "JOIN"]);
+type SpellName = typeof SPELLS[number];
+const ROLE_SPELLS: Record<string, Set<SpellName>> = {
+  Archer: new Set(["DELETE"]),
+  Swordsman: new Set(["INSERT", "UPDATE"]),
+  Wizard: new Set(["SELECT", "JOIN"]),
+};
+const DEFAULT_SPELL_BY_CLASS: Record<string, SpellName> = {
+  Archer: "DELETE",
+  Swordsman: "INSERT",
+  Wizard: "SELECT",
+};
 
 /* ── Character sprites ────────────────────────────────────────── */
 const SPRITES: Record<string, HTMLImageElement> = {};
@@ -200,13 +207,13 @@ export default function GameCanvas({ ws, gameState, myId, attacks, onRequestQuit
   useEffect(() => { wsRef.current = ws; }, [ws]);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [spell, setSpell] = useState<string>("DELETE");
+  const [spell, setSpell] = useState<SpellName>("DELETE");
 
   const [lockedTarget, setLockedTarget] = useState<number | null>(null);
   const lockedTargetRef = useRef<number | null>(null);
   useEffect(() => { lockedTargetRef.current = lockedTarget; }, [lockedTarget]);
 
-  const spellRef = useRef(spell);
+  const spellRef = useRef<SpellName>(spell);
   useEffect(() => { spellRef.current = spell; }, [spell]);
 
   const gsRef = useRef<any>(null);
@@ -218,21 +225,19 @@ export default function GameCanvas({ ws, gameState, myId, attacks, onRequestQuit
   // Derive own player class from game state
   const myClass = gameState?.players?.find((p: any) => p.id === myId)?.name?.split('|')?.[1] || '';
   const isWizard = myClass === 'Wizard';
-  const allowedSpells = isWizard ? WIZARD_SPELLS : DELETER_SPELLS;
+  const allowedSpells = ROLE_SPELLS[myClass] ?? new Set<SpellName>(["DELETE"]);
 
   // Filter SPELLS list to only show role-permitted spells in the HUD
   const visibleSpells = SPELLS.filter(s => allowedSpells.has(s));
 
   // Refs so the keyboard useEffect closure (runs once) always reads fresh values
-  const isWizardRef = useRef(isWizard);
   const visibleSpellsRef = useRef(visibleSpells);
-  useEffect(() => { isWizardRef.current = isWizard; }, [isWizard]);
   useEffect(() => { visibleSpellsRef.current = visibleSpells; }, [visibleSpells]);
 
   // Auto-correct active spell if current selection is not allowed for this role
   useEffect(() => {
     if (myClass && !allowedSpells.has(spell)) {
-      setSpell(isWizard ? "SELECT" : "DELETE");
+      setSpell(DEFAULT_SPELL_BY_CLASS[myClass] ?? "DELETE");
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [myClass]);
@@ -265,10 +270,11 @@ export default function GameCanvas({ ws, gameState, myId, attacks, onRequestQuit
           if (!tgt || !tgt.alive) tid = null;
         }
         if (tid == null) tid = nearestEnemy(gsRef.current, idRef.current);
-        // Wizards can only cast SELECT (the server enforces this too, but we enforce client-side)
-        const spellToCast = isWizardRef.current && spellRef.current !== "JOIN"
-          ? "SELECT"
-          : spellRef.current;
+        const currentClass = gsRef.current?.players?.find((p: any) => p.id === idRef.current)?.name?.split('|')?.[1] || '';
+        const roleSpells = ROLE_SPELLS[currentClass] ?? new Set<SpellName>(["DELETE"]);
+        const spellToCast = roleSpells.has(spellRef.current as SpellName)
+          ? spellRef.current
+          : (DEFAULT_SPELL_BY_CLASS[currentClass] ?? "DELETE");
         wsRef.current.send(JSON.stringify({ type: "spell", spell: spellToCast, target_id: tid }));
       }
       if (e.key.toLowerCase() === "r" && wsRef.current?.readyState === WebSocket.OPEN) {
