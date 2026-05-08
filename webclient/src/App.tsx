@@ -1036,7 +1036,7 @@ export default function App() {
                               ? 'bg-[#1e3a5f] text-[#38bdf8] border border-[#38bdf8]/40'
                               : 'bg-[#3b1f1f] text-[#f87171] border border-[#f87171]/40'
                           }`}>
-                            {isWizard ? '🔍 QUERY' : '⚔ DELETER'}
+                            {isWizard ? 'QUERY' : 'DELETER'}
                           </span>
                           {isMe && <span className="text-[9px] bg-[#3b82f6] text-white px-1.5 py-0.5 rounded font-bold shrink-0">YOU</span>}
                         </div>
@@ -1052,7 +1052,7 @@ export default function App() {
                         const filled = gameState?.players?.some((p: any) => p.name.endsWith(`|${r.value}`));
                         return (
                           <span key={r.value} className={filled ? 'text-[#4ade80] font-bold' : 'text-[#5c3e21]'}>
-                            {r.icon} {r.value}: {filled ? '✅ FILLED' : '⬜ EMPTY'}
+                            {r.icon} {r.value}: {filled ? 'FILLED' : 'EMPTY'}
                           </span>
                         );
                       })}
@@ -1428,6 +1428,7 @@ export default function App() {
                   theme="data-raiders-sql"
                   value={sqlInput}
                   onChange={(value) => setSqlInput(value ?? "")}
+                  loading={null}
                 options={{
                   minimap: { enabled: false },
                   fontSize: 13,
