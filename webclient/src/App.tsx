@@ -458,11 +458,16 @@ export default function App() {
     setInputVal("");
   };
 
+  const canCurrentPlayerQuery = () => {
+    const livePlayer = gameState?.players?.find((p: any) => p.id === myId);
+    return Boolean(livePlayer?.can_query ?? (playerClass === 'Wizard'));
+  };
+
   const sendQuery = (queryText?: string) => {
     const sql = (queryText ?? sqlInput).trim();
     if (!sql || !ws) return;
-    // Only Wizard can send queries — non-Wizards are blocked client-side too
-    if (playerClass !== 'Wizard') return;
+    // Only current QUERY-role holder can send queries
+    if (!canCurrentPlayerQuery()) return;
     ws.send(JSON.stringify({ type: "query", sql }));
     setMessages((m) => [...m, `🔍 > ${sql}`]);
   };
@@ -474,10 +479,11 @@ export default function App() {
   const allowedSpells = gameState?.allowed_spells ?? [];
   const enemies = gameState?.enemies?.filter((e: any) => e.alive) ?? [];
   const me = gameState?.players?.find((p: any) => p.id === myId);
+  const canQuery = Boolean(me?.can_query ?? (playerClass === 'Wizard'));
   const sqlPreview = sqlInput.trim()
     ? sqlInput.trim().split('\n')[0]
     : "SELECT * FROM ...";
-  const isWizardTerminalOpen = showSqlModal && playerClass === 'Wizard';
+  const isWizardTerminalOpen = showSqlModal && canQuery;
   const currentRole = (me?.name?.split('|')?.[1] || playerClass) as "Archer" | "Swordsman" | "Wizard";
   const roleTutorial = {
     Archer: {
@@ -522,8 +528,8 @@ export default function App() {
   }, [roomNum]);
 
   useEffect(() => {
-    if (playerClass !== 'Wizard') setShowSqlModal(false);
-  }, [playerClass]);
+    if (!canQuery) setShowSqlModal(false);
+  }, [canQuery]);
 
   useEffect(() => {
     if (view === 'GAME' && roomNum === 1) {
@@ -1365,7 +1371,7 @@ export default function App() {
             isWizardTerminalOpen ? 'text-[#d4b483]' : 'text-[#4ade80]'
           }`}>
             <span></span> TERMINAL
-            {playerClass === 'Wizard' ? (
+            {canQuery ? (
               <span className={`ml-auto text-[9px] border px-1.5 py-0.5 rounded font-black tracking-widest transition-colors ${
                 isWizardTerminalOpen
                   ? 'bg-[#3e240f] text-[#d4b483] border-[#2e1d0d]'
@@ -1376,12 +1382,12 @@ export default function App() {
             )}
           </h2>
 
-          {playerClass !== 'Wizard' ? (
+          {!canQuery ? (
             /* Non-Wizard locked view */
             <div className="bg-[#2e1d0d] border-2 border-[#3e240f] rounded-lg px-3 py-4 flex flex-col items-center gap-2 text-center">
               <span className="text-2xl">🧙</span>
-              <p className="text-[#d4b483] text-xs font-bold tracking-wide">Only the <span className="text-[#38bdf8]">Wizard</span> can query the database.</p>
-              <p className="text-[#6b4c2a] text-[10px]">Your Wizard teammate's results will appear here when they run a query.</p>
+              <p className="text-[#d4b483] text-xs font-bold tracking-wide">Only the <span className="text-[#38bdf8]">current QUERY role holder</span> can query the database.</p>
+              <p className="text-[#6b4c2a] text-[10px]">If roles transfer after a teammate quits, this terminal unlocks automatically.</p>
             </div>
           ) : (
             /* Wizard terminal launcher */
@@ -1403,7 +1409,7 @@ export default function App() {
             </div>
           )}
 
-          {showSqlModal && playerClass === 'Wizard' && (
+          {showSqlModal && canQuery && (
             <div className="absolute inset-0 z-30 bg-[#5c3e21] border-[4px] border-[#3e240f] rounded-xl shadow-[0_10px_25px_rgba(0,0,0,0.6)] overflow-hidden">
               <div className="bg-[#5c3e21] border-b-[3px] border-[#3e240f] px-3 py-2 flex items-center gap-2">
                 <h3 className="text-[11px] font-black tracking-widest text-[#4ade80]">WIZARD SQL TERMINAL</h3>
@@ -1451,7 +1457,7 @@ export default function App() {
           {queryResult && !queryResult.success && (
             <p className="text-xs text-red-400 font-mono mt-1">Error: {queryResult.message}</p>
           )}
-          {queryResult?.success && queryResult.queried_by && playerClass !== 'Wizard' && (
+          {queryResult?.success && queryResult.queried_by && !canQuery && (
             <p className="text-[10px] text-[#38bdf8] font-bold mt-1">🧙 Intel from {queryResult.queried_by}</p>
           )}
         </div>
