@@ -162,13 +162,19 @@ async def cast_spell(player_id: str, spell: str, target_id: int | None) -> dict:
 
     player = state.players.get(player_id)
     if player:
-        p_class = player.name.split("|")[-1] if "|" in player.name else ""
-        role_spells = ROLE_CASTABLE_SPELLS.get(p_class)
-        if role_spells is None:
-            return {"success": False, "message": "ROLE ERROR: Unknown class. Please rejoin the lobby."}
+        roles = set(getattr(player, "roles", set()))
+        if not roles and "|" in player.name:
+            roles = {player.name.split("|")[-1]}
+
+        role_spells = set()
+        for role in roles:
+            role_spells.update(ROLE_CASTABLE_SPELLS.get(role, set()))
+
+        if not role_spells:
+            return {"success": False, "message": "ROLE ERROR: No active role spells assigned."}
         if spell not in role_spells:
             allowed = ", ".join(sorted(role_spells))
-            return {"success": False, "message": f"ROLE ERROR: {p_class} can only cast: {allowed}."}
+            return {"success": False, "message": f"ROLE ERROR: Your active spells are: {allowed}."}
 
     if spell == "SELECT":
         result = await _spell_select(player_id, target_id)
