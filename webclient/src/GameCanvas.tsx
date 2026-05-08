@@ -193,6 +193,30 @@ function getEnemySubtext(e: any): string {
   return parts.join(" | ");
 }
 
+function getAllowedSpellsForPlayer(player: any): Set<SpellName> {
+  const set = new Set<SpellName>();
+  const roles = Array.isArray(player?.roles) ? player.roles : [];
+  for (const role of roles) {
+    const roleSet = ROLE_SPELLS[role];
+    if (!roleSet) continue;
+    for (const sp of roleSet) set.add(sp);
+  }
+  const granted = Array.isArray(player?.granted_spells) ? player.granted_spells : [];
+  for (const sp of granted) {
+    if ((SPELLS as readonly string[]).includes(sp)) set.add(sp as SpellName);
+  }
+  const baseClass = player?.name?.split('|')?.[1] || '';
+  if (set.size === 0) {
+    const fallback = ROLE_SPELLS[baseClass] ?? new Set<SpellName>(["DELETE"]);
+    for (const sp of fallback) set.add(sp);
+  }
+  if (player?.can_query) {
+    set.add("SELECT");
+    set.add("JOIN");
+  }
+  return set;
+}
+
 export default function GameCanvas({ ws, gameState, myId, attacks, onRequestQuit }: Props) {
   const portalImg = useRef<HTMLImageElement | null>(null);
   useEffect(() => {
@@ -222,13 +246,16 @@ export default function GameCanvas({ ws, gameState, myId, attacks, onRequestQuit
   const idRef = useRef<string | null>(null);
   useEffect(() => { idRef.current = myId; }, [myId]);
 
+  const myPlayer = gameState?.players?.find((p: any) => p.id === myId);
   // Derive own player class from game state
-  const myClass = gameState?.players?.find((p: any) => p.id === myId)?.name?.split('|')?.[1] || '';
-  const isWizard = myClass === 'Wizard';
-  const allowedSpells = ROLE_SPELLS[myClass] ?? new Set<SpellName>(["DELETE"]);
+  const myClass = myPlayer?.name?.split('|')?.[1] || '';
+  const grantedSpells = (Array.isArray(myPlayer?.granted_spells) ? myPlayer.granted_spells : [])
+    .filter((s: string) => (SPELLS as readonly string[]).includes(s)) as SpellName[];
+  const allowedSpells = getAllowedSpellsForPlayer(myPlayer);
 
   // Filter SPELLS list to only show role-permitted spells in the HUD
   const visibleSpells = SPELLS.filter(s => allowedSpells.has(s));
+  const fallbackSpell = visibleSpells[0] ?? (DEFAULT_SPELL_BY_CLASS[myClass] ?? "DELETE");
 
   // Refs so the keyboard useEffect closure (runs once) always reads fresh values
   const visibleSpellsRef = useRef(visibleSpells);
@@ -236,11 +263,11 @@ export default function GameCanvas({ ws, gameState, myId, attacks, onRequestQuit
 
   // Auto-correct active spell if current selection is not allowed for this role
   useEffect(() => {
-    if (myClass && !allowedSpells.has(spell)) {
-      setSpell(DEFAULT_SPELL_BY_CLASS[myClass] ?? "DELETE");
+    if (!allowedSpells.has(spell)) {
+      setSpell(fallbackSpell);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [myClass]);
+  }, [myClass, fallbackSpell, grantedSpells.length]);
 
   const atkRef = useRef<Record<string, number>>({});
   useEffect(() => { atkRef.current = attacks; }, [attacks]);
@@ -270,11 +297,13 @@ export default function GameCanvas({ ws, gameState, myId, attacks, onRequestQuit
           if (!tgt || !tgt.alive) tid = null;
         }
         if (tid == null) tid = nearestEnemy(gsRef.current, idRef.current);
-        const currentClass = gsRef.current?.players?.find((p: any) => p.id === idRef.current)?.name?.split('|')?.[1] || '';
-        const roleSpells = ROLE_SPELLS[currentClass] ?? new Set<SpellName>(["DELETE"]);
+        const currentPlayer = gsRef.current?.players?.find((p: any) => p.id === idRef.current);
+        const currentClass = currentPlayer?.name?.split('|')?.[1] || '';
+        const roleSpells = getAllowedSpellsForPlayer(currentPlayer);
+        const classFallback = SPELLS.find((s) => roleSpells.has(s)) ?? (DEFAULT_SPELL_BY_CLASS[currentClass] ?? "DELETE");
         const spellToCast = roleSpells.has(spellRef.current as SpellName)
           ? spellRef.current
-          : (DEFAULT_SPELL_BY_CLASS[currentClass] ?? "DELETE");
+          : classFallback;
         wsRef.current.send(JSON.stringify({ type: "spell", spell: spellToCast, target_id: tid }));
       }
       if (e.key.toLowerCase() === "r" && wsRef.current?.readyState === WebSocket.OPEN) {
@@ -323,6 +352,11 @@ export default function GameCanvas({ ws, gameState, myId, attacks, onRequestQuit
       const gs = gsRef.current;
       const currentMyId = idRef.current;
       const currentSpell = spellRef.current;
+      const currentMe = gs?.players?.find((p: any) => p.id === currentMyId);
+      const currentAllowedSpells = getAllowedSpellsForPlayer(currentMe);
+      const currentVisibleSpells = SPELLS.filter(s => currentAllowedSpells.has(s));
+      const currentCanQueryRole = Boolean(currentMe?.can_query);
+      const currentClassLabel = currentMe?.name?.split('|')?.[1] || '';
       
       let tid = lockedTargetRef.current;
       if (tid != null) {
@@ -678,8 +712,8 @@ export default function GameCanvas({ ws, gameState, myId, attacks, onRequestQuit
       ctx.beginPath(); ctx.moveTo(0, hudY); ctx.lineTo(W, hudY); ctx.stroke();
 
       let sx = 14;
-      for (let i = 0; i < visibleSpells.length; i++) {
-        const sp = visibleSpells[i];
+      for (let i = 0; i < currentVisibleSpells.length; i++) {
+        const sp = currentVisibleSpells[i];
         const active = sp === currentSpell;
         const col = SPELL_COLORS[sp];
         const label = sp === "JOIN" ? `[E] JOIN (next lvl)` : `[${i + 1}] ${sp}`;
@@ -699,9 +733,9 @@ export default function GameCanvas({ ws, gameState, myId, attacks, onRequestQuit
 
       // Role badge in HUD
       const roleBadgeX = sx + 6;
-      const roleLabel = isWizard ? " QUERY" : " DELETER";
-      const roleColor = isWizard ? "#38bdf8" : "#f87171";
-      const roleBg    = isWizard ? "rgba(30,58,95,0.9)" : "rgba(59,31,31,0.9)";
+      const roleLabel = currentCanQueryRole ? " QUERY" : " DELETER";
+      const roleColor = currentCanQueryRole ? "#38bdf8" : "#f87171";
+      const roleBg    = currentCanQueryRole ? "rgba(30,58,95,0.9)" : "rgba(59,31,31,0.9)";
       ctx.fillStyle = roleBg;
       rrect(ctx, roleBadgeX, hudY + 10, 88, 30, 6);
       ctx.fill();
@@ -714,7 +748,7 @@ export default function GameCanvas({ ws, gameState, myId, attacks, onRequestQuit
       ctx.fillText(roleLabel, roleBadgeX + 44, hudY + 28);
       ctx.font = "bold 8px 'Segoe UI', sans-serif";
       ctx.fillStyle = "rgba(255,255,255,0.5)";
-      ctx.fillText(myClass || "PLAYER", roleBadgeX + 44, hudY + 18);
+      ctx.fillText(currentClassLabel || "PLAYER", roleBadgeX + 44, hudY + 18);
 
       // Target info
       if (tid != null && gs) {
