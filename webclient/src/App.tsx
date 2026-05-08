@@ -1,5 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import GameCanvas from "./GameCanvas";
+import Editor from "@monaco-editor/react";
+import type * as Monaco from "monaco-editor";
 import "./index.css";
 import introMusicUrl from './assets/audio/bg-intro-music.mp3';
 import ingameMusicUrl from './assets/audio/bg-ingame-music.mp3';
@@ -42,6 +44,35 @@ function CustomSelect({ value, options, onChange, label }: { value: string, opti
       )}
     </div>
   );
+}
+
+function configureSqlTheme(monaco: typeof Monaco) {
+  monaco.editor.defineTheme("data-raiders-sql", {
+    base: "vs-dark",
+    inherit: true,
+    rules: [
+      { token: "keyword", foreground: "facc15", fontStyle: "bold" },
+      { token: "string", foreground: "4ade80" },
+      { token: "number", foreground: "0ea5e9" },
+      { token: "comment", foreground: "d4b483", fontStyle: "italic" },
+      { token: "identifier", foreground: "fde6b3" },
+      { token: "delimiter", foreground: "d4b483" },
+      { token: "operator", foreground: "f59e0b" },
+    ],
+    colors: {
+      "editor.background": "#2E1D0D",
+      "editor.foreground": "#FDE6B3",
+      "editorLineNumber.foreground": "#A8825B",
+      "editorLineNumber.activeForeground": "#FACC15",
+      "editorCursor.foreground": "#FACC15",
+      "editor.selectionBackground": "#D9770666",
+      "editor.inactiveSelectionBackground": "#D9770635",
+      "editor.lineHighlightBackground": "#3E240F",
+      "editorGutter.background": "#2E1D0D",
+      "editorIndentGuide.background1": "#784F2B88",
+      "editorIndentGuide.activeBackground1": "#D97706AA",
+    },
+  });
 }
 
 export default function App() {
@@ -109,6 +140,7 @@ export default function App() {
   const [messages, setMessages] = useState<string[]>([]);
   const [inputVal, setInputVal] = useState("");
   const [sqlInput, setSqlInput] = useState("");
+  const [showSqlModal, setShowSqlModal] = useState(false);
   const [queryResult, setQueryResult] = useState<any>(null);
   const [onlineCount, setOnlineCount] = useState(1);
   const [serverStats, setServerStats] = useState<any>(null);
@@ -426,13 +458,13 @@ export default function App() {
     setInputVal("");
   };
 
-  const sendQuery = () => {
-    if (!sqlInput.trim() || !ws) return;
+  const sendQuery = (queryText?: string) => {
+    const sql = (queryText ?? sqlInput).trim();
+    if (!sql || !ws) return;
     // Only Wizard can send queries — non-Wizards are blocked client-side too
     if (playerClass !== 'Wizard') return;
-    ws.send(JSON.stringify({ type: "query", sql: sqlInput }));
-    setMessages((m) => [...m, `🔍 > ${sqlInput}`]);
-    setSqlInput("");
+    ws.send(JSON.stringify({ type: "query", sql }));
+    setMessages((m) => [...m, `🔍 > ${sql}`]);
   };
 
   const roomName = gameState?.room ?? "—";
@@ -442,6 +474,10 @@ export default function App() {
   const allowedSpells = gameState?.allowed_spells ?? [];
   const enemies = gameState?.enemies?.filter((e: any) => e.alive) ?? [];
   const me = gameState?.players?.find((p: any) => p.id === myId);
+  const sqlPreview = sqlInput.trim()
+    ? sqlInput.trim().split('\n')[0]
+    : "SELECT * FROM ...";
+  const isWizardTerminalOpen = showSqlModal && playerClass === 'Wizard';
   const currentRole = (me?.name?.split('|')?.[1] || playerClass) as "Archer" | "Swordsman" | "Wizard";
   const roleTutorial = {
     Archer: {
@@ -484,6 +520,10 @@ export default function App() {
   useEffect(() => {
     setQueryResult(null);
   }, [roomNum]);
+
+  useEffect(() => {
+    if (playerClass !== 'Wizard') setShowSqlModal(false);
+  }, [playerClass]);
 
   useEffect(() => {
     if (view === 'GAME' && roomNum === 1) {
@@ -1316,11 +1356,21 @@ export default function App() {
         )}
 
         {/* SQL Terminal */}
-        <div className="bg-[#5c3e21] border-[6px] border-[#3e240f] rounded-2xl p-3 flex flex-col shrink-0 shadow-[inset_0_0_10px_rgba(0,0,0,0.5),0_6px_12px_rgba(0,0,0,0.5)]">
-          <h2 className="text-sm font-black text-[#4ade80] tracking-wider mb-2 flex items-center gap-1.5 drop-shadow-sm">
+        <div className={`border-[6px] rounded-2xl p-3 flex flex-col shrink-0 relative transition-colors duration-200 ${
+          isWizardTerminalOpen
+            ? 'bg-[#523315] border-[#2e1d0d] shadow-[inset_0_0_0_rgba(0,0,0,0.0),0_6px_12px_rgba(0,0,0,0.45)]'
+            : 'bg-[#5c3e21] border-[#3e240f] shadow-[inset_0_0_10px_rgba(0,0,0,0.5),0_6px_12px_rgba(0,0,0,0.5)]'
+        }`}>
+          <h2 className={`text-sm font-black tracking-wider mb-2 flex items-center gap-1.5 drop-shadow-sm transition-colors ${
+            isWizardTerminalOpen ? 'text-[#d4b483]' : 'text-[#4ade80]'
+          }`}>
             <span></span> TERMINAL
             {playerClass === 'Wizard' ? (
-              <span className="ml-auto text-[9px] bg-[#1e3a5f] text-[#38bdf8] border border-[#38bdf8]/40 px-1.5 py-0.5 rounded font-black tracking-widest">🔍 QUERY PLAYER</span>
+              <span className={`ml-auto text-[9px] border px-1.5 py-0.5 rounded font-black tracking-widest transition-colors ${
+                isWizardTerminalOpen
+                  ? 'bg-[#3e240f] text-[#d4b483] border-[#2e1d0d]'
+                  : 'bg-[#1e3a5f] text-[#38bdf8] border-[#38bdf8]/40'
+              }`}>🔍 QUERY PLAYER</span>
             ) : (
               <span className="ml-auto text-[9px] bg-[#3b1f1f] text-[#f87171] border border-[#f87171]/40 px-1.5 py-0.5 rounded font-black tracking-widest">⚔ READ-ONLY</span>
             )}
@@ -1334,24 +1384,67 @@ export default function App() {
               <p className="text-[#6b4c2a] text-[10px]">Your Wizard teammate's results will appear here when they run a query.</p>
             </div>
           ) : (
-            /* Wizard active input */
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-[#4ade80] font-mono text-xl font-bold">»</span>
-              <input
-                type="text"
-                value={sqlInput}
-                onChange={(e) => setSqlInput(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && sendQuery()}
-                placeholder={`SELECT * FROM ...`}
-                className="flex-1 min-w-0 bg-[#2e1d0d] border-[3px] border-[#1e1208] rounded px-3 py-2 text-sm font-mono text-[#4ade80] placeholder-[#784f2b] focus:outline-none focus:border-[#4ade80] transition-colors shadow-inner"
-              />
+            /* Wizard terminal launcher */
+            <div className="flex flex-col gap-2 mb-2">
               <button
-                onClick={sendQuery}
+                type="button"
+                onClick={() => setShowSqlModal(true)}
+                className="w-full bg-[#2e1d0d] border-[3px] border-[#1e1208] rounded px-3 py-2 text-sm font-mono text-left text-[#4ade80] hover:border-[#4ade80] transition-colors shadow-inner flex items-center gap-2"
+              >
+                <span className="text-[#4ade80] font-bold">»</span>
+                <span className="truncate">{sqlPreview}</span>
+              </button>
+              <button
+                onClick={() => setShowSqlModal(true)}
                 className="bg-[#d97706] hover:bg-[#b45309] active:bg-[#92400e] text-[#fde6b3] border-b-[4px] border-[#92400e] active:border-b-0 active:translate-y-[4px] font-black tracking-wider px-3 py-2 rounded-lg text-sm transition-all focus:outline-none"
               >
-                RUN
+                OPEN SQL EDITOR
               </button>
             </div>
+          )}
+
+          {showSqlModal && playerClass === 'Wizard' && (
+            <div className="absolute inset-0 z-30 bg-[#5c3e21] border-[4px] border-[#3e240f] rounded-xl shadow-[0_10px_25px_rgba(0,0,0,0.6)] overflow-hidden">
+              <div className="bg-[#5c3e21] border-b-[3px] border-[#3e240f] px-3 py-2 flex items-center gap-2">
+                <h3 className="text-[11px] font-black tracking-widest text-[#4ade80]">WIZARD SQL TERMINAL</h3>
+                <span className="text-[9px] text-[#d4b483] font-bold ml-auto">SQL</span>
+                <button
+                  onClick={() => sendQuery()}
+                  className="bg-[#d97706] hover:bg-[#b45309] active:bg-[#92400e] text-[#fde6b3] border-b-[3px] border-[#92400e] active:border-b-0 active:translate-y-[3px] font-black tracking-wide px-2.5 py-1 rounded text-[10px] transition-all"
+                >
+                  RUN
+                </button>
+                <button
+                  onClick={() => setShowSqlModal(false)}
+                  className="bg-[#5c3e21] hover:bg-[#3e240f] text-[#d4b483] border-b-[3px] border-[#3e240f] active:border-b-0 active:translate-y-[3px] font-black tracking-wide px-2.5 py-1 rounded text-[10px] transition-all"
+                >
+                  CLOSE
+                </button>
+              </div>
+              <div className="h-[170px] bg-[#2e1d0d]">
+                <Editor
+                  language="sql"
+                  beforeMount={configureSqlTheme}
+                  theme="data-raiders-sql"
+                  value={sqlInput}
+                  onChange={(value) => setSqlInput(value ?? "")}
+                options={{
+                  minimap: { enabled: false },
+                  fontSize: 13,
+                  lineHeight: 20,
+                  wordWrap: "on",
+                  automaticLayout: true,
+                  scrollBeyondLastLine: false,
+                  tabSize: 2,
+                  lineNumbersMinChars: 2,
+                  lineDecorationsWidth: 8,
+                  glyphMargin: false,
+                  folding: false,
+                  fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace",
+                }}
+              />
+            </div>
+          </div>
           )}
 
           {queryResult && !queryResult.success && (
