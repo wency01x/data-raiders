@@ -7,8 +7,8 @@ import introMusicUrl from './assets/audio/bg-intro-music.mp3';
 import ingameMusicUrl from './assets/audio/bg-ingame-music.mp3';
 
 const ROLE_OPTIONS = [
-  { value: "Archer", icon: "🏹", label: "Archer (Deleter)" },
-  { value: "Swordsman", icon: "⚔️", label: "Swordsman (Deleter)" },
+  { value: "Archer", icon: "🏹", label: "Archer (Delete)" },
+  { value: "Swordsman", icon: "⚔️", label: "Swordsman (Insert, Update)" },
   { value: "Wizard", icon: "🧙", label: "Wizard (Query)" },
 ] as const;
 
