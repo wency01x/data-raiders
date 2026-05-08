@@ -357,13 +357,13 @@ async def websocket_endpoint(ws: WebSocket):
                     continue
                 sql = msg.get("sql", "").strip().rstrip(";").strip()
 
-                # Role check: only the Wizard (Query Player) may run SELECT queries
-                p_class = player.name.split("|")[-1] if "|" in player.name else ""
-                if p_class != "Wizard":
+                # Role check: only players currently holding Wizard role can query
+                can_query = "Wizard" in getattr(player, "roles", set())
+                if not can_query:
                     await bus.send_to(player.id, {
                         "type": "query_result",
                         "success": False,
-                        "message": "ROLE ERROR: Only the Wizard (Query Player) can query the database! Ask your Wizard teammate to SELECT.",
+                        "message": "ROLE ERROR: You don't currently hold QUERY role. Wait for role transfer or coordinate with your Wizard.",
                         "columns": [],
                         "rows": [],
                     })
@@ -496,9 +496,15 @@ async def websocket_endpoint(ws: WebSocket):
         pass
     finally:
         if player:
-            await state.remove_player(player.id)
+            transfer = await state.remove_player(player.id)
             await bus.disconnect(player.id)
             await bus.enqueue({"type": "player_left", "player_id": player.id, "player_name": player.name})
+            if transfer:
+                names = ", ".join(n.split("|")[0] for n in transfer.get("to_player_names", []))
+                await bus.enqueue({
+                    "type": "reset_ack",
+                    "message": f"ROLE TRANSFER: {', '.join(transfer['roles'])} granted to {names}",
+                })
             print(f"[Server] {player.name} disconnected. | Players online: {bus.player_count}")
 
             # When the last player leaves, reset all session state so a new game can be hosted
