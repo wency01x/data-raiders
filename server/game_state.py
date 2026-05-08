@@ -3,6 +3,13 @@ import uuid
 from dataclasses import dataclass, field
 from shared.constants import PLAYER_COLORS, MAP_COLS, MAP_ROWS, TILE_SIZE, PLAYER_SPEED
 
+SPELL_ORDER = ["SELECT", "DELETE", "INSERT", "UPDATE", "JOIN"]
+ROLE_SPELLS = {
+    "Archer": {"DELETE"},
+    "Swordsman": {"INSERT", "UPDATE"},
+    "Wizard": {"SELECT", "JOIN"},
+}
+
 
 @dataclass
 class Player:
@@ -15,14 +22,21 @@ class Player:
     lives: int = 3
     color_idx: int = 0
     score: int = 0
+    roles: set[str] = field(default_factory=set)
 
     def to_dict(self):
+        granted = set()
+        for role in self.roles:
+            granted.update(ROLE_SPELLS.get(role, set()))
         return {
             "id": self.id, "name": self.name,
             "x": self.x,  "y": self.y,
             "hp": self.hp, "max_hp": self.max_hp,
             "lives": self.lives,
             "color_idx": self.color_idx, "score": self.score,
+            "roles": sorted(self.roles),
+            "granted_spells": [s for s in SPELL_ORDER if s in granted],
+            "can_query": "Wizard" in self.roles,
         }
 
 
@@ -99,6 +113,12 @@ class GameState:
         self.room_joined: bool = False
         self._color_counter = 0
 
+    @staticmethod
+    def _extract_role(name: str) -> str:
+        if "|" not in name:
+            return ""
+        return name.split("|")[-1].strip()
+
     def next_color_idx(self) -> int:
         idx = self._color_counter % len(PLAYER_COLORS)
         self._color_counter += 1
@@ -109,15 +129,31 @@ class GameState:
             pid   = str(uuid.uuid4())[:8]
             color = self.next_color_idx()
             spawn_x = (len(self.players) + 1) * 2 * TILE_SIZE
+            role = self._extract_role(name)
             p = Player(id=pid, name=name,
                        x=float(spawn_x), y=float(2 * TILE_SIZE),
-                       color_idx=color)
+                       color_idx=color,
+                       roles={role} if role else set())
             self.players[pid] = p
             return p
 
     async def remove_player(self, player_id: str):
         async with self.lock:
-            self.players.pop(player_id, None)
+            departed = self.players.pop(player_id, None)
+            if not departed or not departed.roles or not self.players:
+                return None
+            if self.game_phase == "LOBBY":
+                return None
+
+            # Transfer departed roles to all remaining players so anyone left can continue.
+            recipients = []
+            for p in self.players.values():
+                p.roles.update(departed.roles)
+                recipients.append(p.name)
+            return {
+                "to_player_names": recipients,
+                "roles": sorted(departed.roles),
+            }
 
     async def move_player(self, player_id: str, dx: float, dy: float):
         async with self.lock:
