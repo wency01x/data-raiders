@@ -34,6 +34,7 @@ interface Props {
   gameState: any;
   myId: string | null;
   attacks: Record<string, number>;
+  castSpells: Record<string, string>;
   onRequestQuit: () => void;
   inputLocked?: boolean;
 }
@@ -218,7 +219,7 @@ function getAllowedSpellsForPlayer(player: any): Set<SpellName> {
   return set;
 }
 
-export default function GameCanvas({ ws, gameState, myId, attacks, onRequestQuit, inputLocked = false }: Props) {
+export default function GameCanvas({ ws, gameState, myId, attacks, castSpells, onRequestQuit, inputLocked = false }: Props) {
   const portalImg = useRef<HTMLImageElement | null>(null);
   useEffect(() => {
     const img = new Image();
@@ -272,6 +273,8 @@ export default function GameCanvas({ ws, gameState, myId, attacks, onRequestQuit
 
   const atkRef = useRef<Record<string, number>>({});
   useEffect(() => { atkRef.current = attacks; }, [attacks]);
+  const castSpellsRef = useRef<Record<string, string>>({});
+  useEffect(() => { castSpellsRef.current = castSpells; }, [castSpells]);
 
   const prevXRef = useRef<Record<string, number>>({});
   const facingRef = useRef<Record<string, number>>({});
@@ -311,6 +314,10 @@ export default function GameCanvas({ ws, gameState, myId, attacks, onRequestQuit
         const spellToCast = roleSpells.has(spellRef.current as SpellName)
           ? spellRef.current
           : classFallback;
+        if (idRef.current) {
+          atkRef.current[idRef.current] = Date.now();
+          castSpellsRef.current[idRef.current] = spellToCast;
+        }
         wsRef.current.send(JSON.stringify({ type: "spell", spell: spellToCast, target_id: tid }));
       }
       if (e.key.toLowerCase() === "r" && wsRef.current?.readyState === WebSocket.OPEN) {
@@ -620,6 +627,9 @@ export default function GameCanvas({ ws, gameState, myId, attacks, onRequestQuit
           const atkTime = atkRef.current[p.id] || 0;
           const elapsed = Date.now() - atkTime;
           const isAttacking = elapsed < 500;
+          const castSpell = castSpellsRef.current[p.id];
+          const isBossRoom = (gs?.room_number || 1) === 5;
+          const isSwordsmanUpdateCast = !isBossRoom && cClass === "Swordsman" && castSpell === "UPDATE" && isAttacking;
           
           const img = isAttacking ? SPRITES_ATK[cClass] : SPRITES[cClass];
 
@@ -676,6 +686,28 @@ export default function GameCanvas({ ws, gameState, myId, attacks, onRequestQuit
             ctx.fillStyle = "#000";
             ctx.fillRect(p.x + 16, p.y + 17, 4, 5);
             ctx.fillRect(p.x + 34, p.y + 17, 4, 5);
+          }
+
+          if (isSwordsmanUpdateCast) {
+            const pulse = 0.65 + Math.sin(Date.now() / 85) * 0.35;
+            const radius = TILE * (0.68 + pulse * 0.4);
+            const cx = p.x + TILE / 2;
+            const cy = p.y + TILE / 2 - 10;
+            ctx.save();
+            ctx.globalAlpha = 0.5 + pulse * 0.25;
+            ctx.strokeStyle = "#f59e0b";
+            ctx.lineWidth = 3;
+            ctx.shadowColor = "#facc15";
+            ctx.shadowBlur = 18;
+            ctx.beginPath();
+            ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.globalAlpha = 0.22 + pulse * 0.18;
+            ctx.fillStyle = "#f59e0b";
+            ctx.beginPath();
+            ctx.arc(cx, cy, radius * 0.7, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
           }
 
           // name + score
