@@ -46,6 +46,12 @@ function CustomSelect({ value, options, onChange, label }: { value: string, opti
   );
 }
 
+function getRoleBadgeLabel(role: string) {
+  if (role === "Wizard") return "QUERY";
+  if (role === "Swordsman") return "INSERT / UPDATE";
+  return "DELETE";
+}
+
 function configureSqlTheme(monaco: typeof Monaco) {
   monaco.editor.defineTheme("data-raiders-sql", {
     base: "vs-dark",
@@ -743,7 +749,7 @@ export default function App() {
                   <span>{playerClass === 'Wizard' ? '🧙' : playerClass === 'Archer' ? '🏹' : '⚔️'}</span>
                   <span>{playerClass}</span>
                   <span className="ml-auto text-[9px] bg-[#3e240f] text-[#d97706] px-1.5 py-0.5 rounded font-black tracking-wider">
-                    {playerClass === 'Wizard' ? 'QUERY' : 'DELETER'}
+                    {getRoleBadgeLabel(playerClass)}
                   </span>
                 </div>
               </div>
@@ -1022,9 +1028,9 @@ export default function App() {
                   <div className="flex flex-col gap-1.5">
                     {gameState?.players?.map((p: any) => {
                       const pClass = p.name.split('|')[1] || 'Player';
-                      const isWizard = pClass === 'Wizard';
                       const isMe = p.id === myId;
                       const isDead = p.lives !== undefined && p.lives <= 0;
+                      const badgeLabel = getRoleBadgeLabel(pClass);
                       return (
                         <div key={p.id} className={`flex items-center gap-2 p-2 rounded-lg border ${
                           isMe
@@ -1032,17 +1038,19 @@ export default function App() {
                             : 'bg-[#2e1d0d] border-[#1e1208]'
                         }`}>
                           <span className="text-base shrink-0">
-                            {isWizard ? '🧙' : pClass === 'Archer' ? '🏹' : '⚔️'}
+                            {pClass === 'Wizard' ? '🧙' : pClass === 'Archer' ? '🏹' : '⚔️'}
                           </span>
                           <span className={`font-bold text-sm truncate ${ isDead ? 'text-[#ef4444]' : 'text-[#fde6b3]' }`}>
                             {p.name.split('|')[0]}
                           </span>
                           <span className={`ml-auto text-[9px] px-1.5 py-0.5 rounded font-black tracking-wider shrink-0 ${
-                            isWizard
+                            pClass === 'Wizard'
                               ? 'bg-[#1e3a5f] text-[#38bdf8] border border-[#38bdf8]/40'
-                              : 'bg-[#3b1f1f] text-[#f87171] border border-[#f87171]/40'
+                              : pClass === 'Swordsman'
+                                ? 'bg-[#3e240f] text-[#f59e0b] border border-[#f59e0b]/40'
+                                : 'bg-[#3b1f1f] text-[#f87171] border border-[#f87171]/40'
                           }`}>
-                            {isWizard ? 'QUERY' : 'DELETER'}
+                            {badgeLabel}
                           </span>
                           {isMe && <span className="text-[9px] bg-[#3b82f6] text-white px-1.5 py-0.5 rounded font-bold shrink-0">YOU</span>}
                         </div>
