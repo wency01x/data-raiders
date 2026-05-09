@@ -1347,7 +1347,14 @@ export default function App() {
 
       {/* ── CENTER COLUMN (Canvas) ─────────────────────── */}
       <div className="flex flex-col w-full flex-1 h-full min-w-0 border-[6px] border-[#3e240f] rounded-2xl overflow-hidden shadow-[0_0_15px_rgba(0,0,0,0.5)] relative">
-        <GameCanvas ws={ws} gameState={gameState} myId={myId} attacks={attacks} onRequestQuit={() => setShowQuitConfirm(true)} />
+        <GameCanvas
+          ws={ws}
+          gameState={gameState}
+          myId={myId}
+          attacks={attacks}
+          onRequestQuit={() => setShowQuitConfirm(true)}
+          inputLocked={isWizardTerminalOpen}
+        />
       </div>
 
       {/* ── RIGHT COLUMN (Interaction) ─────────────────── */}
