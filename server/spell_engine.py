@@ -1,5 +1,6 @@
 import asyncio
 import functools
+import json
 import time
 from server.db import get_connection
 from server.game_state import state
@@ -342,6 +343,56 @@ async def _spell_insert(player_id: str) -> dict:
 
 
 async def _spell_update(player_id: str, target_id: int | None) -> dict:
+    room_num = state.room_number
+    should_run_merge = room_num in (1, 2, 4) or (room_num == 3 and state.targets_remaining == 0)
+    if should_run_merge:
+
+        async with state.lock:
+            if state.room_schema_merged:
+                return {"success": False, "message": "Schema already merged. Wizard should cast JOIN."}
+            state.room_schema_merged = True
+
+        merged_table_by_room = {
+            1: ("employees", ["id", "name", "status", "dept"]),
+            2: ("employees_dept", ["id", "name", "dept", "salary"]),
+            3: ("employees_salary", ["id", "name", "role", "salary"]),
+            4: ("employees_fk", ["id", "name", "manager_id"]),
+        }
+        table_name, columns = merged_table_by_room.get(state.room_number, ("cleaned_table", ["id"]))
+
+        def _room_live_snapshot():
+            conn = get_connection()
+            try:
+                cols_sql = ", ".join(columns)
+                rows = conn.execute(
+                    f"SELECT {cols_sql} FROM {state.current_room} WHERE alive = 1 ORDER BY id"
+                ).fetchall()
+                result_rows = [[row[c] for c in columns] for row in rows]
+                return columns, result_rows
+            finally:
+                conn.close()
+
+        columns, rows = await _run_in_thread(_room_live_snapshot)
+        async with state.lock:
+            state.room_schema = json.dumps({
+                "table_name": table_name,
+                "columns": columns,
+                "sample_data": rows[:2],
+            })
+        await bus.enqueue({
+            "type": "query_result",
+            "success": True,
+            "message": "[SYSTEM] Schema merge complete — clean table synced.",
+            "columns": columns,
+            "rows": rows,
+            "queried_by": "SYSTEM",
+        })
+        await state.add_score(player_id, 20)
+        return {
+            "success": True,
+            "message": "UPDATE complete! Clean table merged. Wizard cast JOIN to open the portal. +20 pts",
+        }
+
     if target_id is None:
         return {"success": False, "message": "UPDATE needs a target."}
 
@@ -444,6 +495,8 @@ async def _spell_update(player_id: str, target_id: int | None) -> dict:
 async def _spell_join() -> dict:
     def _do_join():
         # Do not use DB queries since game state already tracks the exact targets needed.
+        if state.room_number in (1, 2, 3, 4) and not state.room_schema_merged:
+            return False, "JOIN failed — Swordsman must cast UPDATE merge before portal can open."
         rem = state.targets_remaining
         if rem > 0:
             if state.room_number == 3:
