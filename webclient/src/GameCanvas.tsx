@@ -35,6 +35,7 @@ interface Props {
   myId: string | null;
   attacks: Record<string, number>;
   onRequestQuit: () => void;
+  inputLocked?: boolean;
 }
 
 /* ── nearest-enemy helper ─────────────────────────────────────── */
@@ -217,7 +218,7 @@ function getAllowedSpellsForPlayer(player: any): Set<SpellName> {
   return set;
 }
 
-export default function GameCanvas({ ws, gameState, myId, attacks, onRequestQuit }: Props) {
+export default function GameCanvas({ ws, gameState, myId, attacks, onRequestQuit, inputLocked = false }: Props) {
   const portalImg = useRef<HTMLImageElement | null>(null);
   useEffect(() => {
     const img = new Image();
@@ -276,10 +277,16 @@ export default function GameCanvas({ ws, gameState, myId, attacks, onRequestQuit
   const facingRef = useRef<Record<string, number>>({});
 
   const keys = useRef<Record<string, boolean>>({});
+  const inputLockedRef = useRef(inputLocked);
+  useEffect(() => {
+    inputLockedRef.current = inputLocked;
+    if (inputLocked) keys.current = {};
+  }, [inputLocked]);
 
   /* ── keyboard ─────────────────────────────────────────────── */
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
+      if (inputLockedRef.current) return;
       if ((e.target as HTMLElement)?.tagName === "INPUT") return;
       keys.current[e.key.toLowerCase()] = true;
 
@@ -321,6 +328,7 @@ export default function GameCanvas({ ws, gameState, myId, attacks, onRequestQuit
     const iv = setInterval(() => {
       const currentWs = wsRef.current;
       if (!currentWs || currentWs.readyState !== WebSocket.OPEN) return;
+      if (inputLockedRef.current) return;
       let dx = 0, dy = 0;
       const k = keys.current;
       if (k["a"] || k["arrowleft"])  dx -= 1;
