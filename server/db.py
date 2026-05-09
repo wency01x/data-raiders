@@ -146,10 +146,11 @@ def init_db():
                 "LEVEL 1 — THE CORRUPTION SPREADS\n"
                 "Table: employees (id, name, status, dept)\n"
                 "A digital plague is infecting our staff records!\n"
-                "Identify the 'CORRUPTED' ones with SELECT, then purge them with DELETE!"
+                "Identify the 'CORRUPTED' ones with SELECT, then purge them with DELETE!\n"
+                "After cleanup, the Swordsman must cast UPDATE to merge and restore the schema."
             ),
             # objective
-            "Hunt down and eliminate all corrupted employee records before it's too late.",
+            "Hunt down corrupted records, then have Swordsman cast UPDATE to finalize table recovery.",
             # schema_info
             json.dumps({
                 "table_name": "employees",
@@ -160,9 +161,9 @@ def init_db():
                 ]
             }),
             # hint
-            "TIP: Use SELECT on each enemy first to discover which ones are CORRUPTED!",
+            "TIP: Use SELECT to identify CORRUPTED rows. After deleting them, cast UPDATE once to complete schema merge.",
             # allowed_spells
-            "SELECT,DELETE"
+            "SELECT,DELETE,UPDATE"
         ),
         (
             2, "employees_dept", "enemies_room2", 0,
@@ -170,9 +171,10 @@ def init_db():
                 "LEVEL 2 — INFESTATION ALERT\n"
                 "Table: employees_dept (id, name, dept, salary)\n"
                 "The notorious BUGS department has breached sector 2!\n"
-                "Show no mercy: DELETE every employee from the 'BUGS' department."
+                "Show no mercy: DELETE every employee from the 'BUGS' department.\n"
+                "After cleanup, the Swordsman must cast UPDATE to merge the clean table."
             ),
-            "Clear out the entire BUGS department. Leave the good devs alone!",
+            "Clear out the entire BUGS department, then cast UPDATE merge before portal join.",
             json.dumps({
                 "table_name": "employees_dept",
                 "columns": ["id", "name", "dept", "salary"],
@@ -181,8 +183,8 @@ def init_db():
                     [2, "Dave", "Engineering", 75000],
                 ]
             }),
-            "TIP: Don't delete the good employees! Only target dept = 'BUGS'.",
-            "SELECT,DELETE"
+            "TIP: Don't delete the good employees! Only target dept = 'BUGS'. Then Swordsman casts UPDATE merge.",
+            "SELECT,DELETE,INSERT,UPDATE"
         ),
         (
             3, "employees_salary", "enemies_room3", 0,
@@ -190,9 +192,10 @@ def init_db():
                 "LEVEL 3 — PAYDAY HEIST\n"
                 "Table: employees_salary (id, name, role, salary)\n"
                 "The Devs are staging a walkout! They demand better compensation.\n"
-                "Use UPDATE to double the salary for everyone with role = 'Dev'."
+                "Use UPDATE on every Dev until they're buffed.\n"
+                "Then cast UPDATE once more to merge the clean table."
             ),
-            "Buff the Developers' salaries using the UPDATE spell to calm them down.",
+            "Buff every Dev with UPDATE, then perform UPDATE merge before portal join.",
             json.dumps({
                 "table_name": "employees_salary",
                 "columns": ["id", "name", "role", "salary"],
@@ -201,7 +204,7 @@ def init_db():
                     [2, "Frank", "QA", 55000],
                 ]
             }),
-            "TIP: UPDATE only affects the target's HP. Use it on the right employees!",
+            "TIP: First UPDATE target Dev rows. After all Devs are buffed, cast UPDATE merge.",
             "SELECT,UPDATE"
         ),
         (
@@ -210,9 +213,10 @@ def init_db():
                 "LEVEL 4 — CHAIN OF COMMAND\n"
                 "Table: employees_fk (id, name, manager_id)\n"
                 "A hostile corporate takeover! manager_id relies on other IDs.\n"
-                "You must overthrow the hierarchy from the bottom up! DELETE children before parents."
+                "You must overthrow the hierarchy from the bottom up! DELETE children before parents.\n"
+                "After cleanup, finalize with Swordsman UPDATE merge."
             ),
-            "Dismantle the management chain systematically from the lowest tier to the CEO.",
+            "Dismantle the management chain, then cast UPDATE merge before portal join.",
             json.dumps({
                 "table_name": "employees_fk",
                 "columns": ["id", "name", "manager_id"],
@@ -222,8 +226,8 @@ def init_db():
                     [3, "Worker", 2],
                 ]
             }),
-            "TIP: Query to find who reports to whom. Delete from bottom up!",
-            "SELECT,DELETE"
+            "TIP: Query to find who reports to whom. Delete from bottom up, then Swordsman UPDATE merge.",
+            "SELECT,DELETE,UPDATE"
         ),
         (
             5, "sys_boss", "enemies_room5", 0,
