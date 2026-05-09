@@ -157,6 +157,7 @@ export default function App() {
   const [gameState, setGameState] = useState<any>(null);
   const [myId, setMyId] = useState<string | null>(null);
   const [attacks, setAttacks] = useState<Record<string, number>>({});
+  const [castSpells, setCastSpells] = useState<Record<string, string>>({});
   const [playerName, setPlayerName] = useState(
     () => "Player_" + Math.floor(Math.random() * 100)
   );
@@ -272,12 +273,18 @@ export default function App() {
           setMessages((m) => [...m, `${msg.success ? "✅" : "❌"} ${msg.message}`]);
           if (msg.success) {
             setAttacks((a) => ({ ...a, [msg.player_id]: Date.now() }));
+            if (msg.player_id && msg.spell) {
+              setCastSpells((s) => ({ ...s, [msg.player_id]: String(msg.spell).toUpperCase() }));
+            }
           }
           break;
         case "spell_cast":
+          setAttacks((a) => ({ ...a, [msg.player_id]: Date.now() }));
+          if (msg.player_id && msg.spell) {
+            setCastSpells((s) => ({ ...s, [msg.player_id]: String(msg.spell).toUpperCase() }));
+          }
           if (msg.player_id !== myIdRef.current) {
             setMessages((m) => [...m, `⚔ ${(msg.player_id || "?").slice(0, 4)} cast ${msg.spell}`]);
-            setAttacks((a) => ({ ...a, [msg.player_id]: Date.now() }));
           }
           break;
         case "enemy_buffed":
@@ -484,6 +491,15 @@ export default function App() {
   const hint = gameState?.hint ?? "";
   const allowedSpells = gameState?.allowed_spells ?? [];
   const enemies = gameState?.enemies?.filter((e: any) => e.alive) ?? [];
+  const needsRoomMerge = roomNum >= 1
+    && roomNum <= 4
+    && Boolean(gameState?.room_cleared)
+    && !Boolean(gameState?.room_schema_merged);
+  const needsRoomJoin = roomNum >= 1
+    && roomNum <= 4
+    && Boolean(gameState?.room_cleared)
+    && Boolean(gameState?.room_schema_merged)
+    && !Boolean(gameState?.room_joined);
   const me = gameState?.players?.find((p: any) => p.id === myId);
   const canQuery = Boolean(me?.can_query ?? (playerClass === 'Wizard'));
   const sqlPreview = sqlInput.trim()
@@ -1171,13 +1187,32 @@ export default function App() {
     }
 
     if (gamePhase === "LEVEL_COMPLETE") {
+      const levelCompleteTitle = roomNum === 1
+        ? "SCHEMA MERGED!"
+        : roomNum === 2
+          ? "PATCH VERIFIED!"
+          : `LEVEL ${roomNum} COMPLETE!`;
+      const levelCompleteSubtitle = roomNum === 1
+        ? "The table was cleaned and the updated schema is ready."
+        : roomNum === 2
+          ? "The Swordsman sealed the fix with INSERT."
+          : "Portal activated...";
       return (
-        <div className={`h-full w-full bg-[#1b3d1b] flex flex-col items-center justify-center font-sans ${useCRT ? 'crt' : ''}`}>
-          <div className="text-center animate-[bounce_2s_ease-in-out_infinite]">
-            <h1 className="text-6xl md:text-8xl font-pixelify text-[#4ade80] tracking-widest drop-shadow-[0_5px_15px_rgba(74,222,128,0.6)]">
-              LEVEL {roomNum} COMPLETE!
-            </h1>
-            <p className="mt-4 text-[#fde6b3] text-2xl font-bold tracking-widest">Portal activated...</p>
+        <div className={`absolute inset-0 z-[60] flex items-center justify-center font-sans ${useCRT ? 'crt' : ''}`}>
+          <div className="absolute inset-0 bg-black/75 animate-[fadeIn_0.3s_ease-out]" />
+          <div className="relative flex flex-col items-center gap-4 text-center px-6 py-8">
+            <p
+              className="text-[#4ade80] font-pixelify text-6xl md:text-8xl tracking-widest drop-shadow-[0_0_40px_rgba(74,222,128,0.9)] animate-[deathPulse_0.8s_ease-in-out_infinite_alternate]"
+              style={{ textShadow: '0 0 40px #22c55e, 0 0 90px #14532d' }}
+            >
+              {levelCompleteTitle}
+            </p>
+            <p className="text-[#fde6b3] font-pixelify text-2xl md:text-4xl tracking-widest animate-pulse">
+              {levelCompleteSubtitle}
+            </p>
+            <p className="text-[#d4b483] font-bold text-sm md:text-lg tracking-wider mt-2">
+              Preparing the next room...
+            </p>
           </div>
         </div>
       );
@@ -1254,6 +1289,10 @@ export default function App() {
           <div className="mt-3 flex items-center gap-2">
             {!gameState?.room_cleared ? (
               <span className="text-xs font-bold text-[#fca5a5]">⚔ {gameState?.targets_remaining ?? enemies.length} targets remaining</span>
+            ) : needsRoomMerge ? (
+              <span className="text-xs font-bold text-[#f59e0b]">⚔ Swordsman must cast UPDATE to merge the schema</span>
+            ) : needsRoomJoin ? (
+              <span className="text-xs font-bold text-[#38bdf8]">🧙 Wizard must cast JOIN to open the portal</span>
             ) : (
               <span className="text-xs font-bold text-[#4ade80]">✓ All clear — walk to the portal!</span>
             )}
@@ -1352,6 +1391,7 @@ export default function App() {
           gameState={gameState}
           myId={myId}
           attacks={attacks}
+          castSpells={castSpells}
           onRequestQuit={() => setShowQuitConfirm(true)}
           inputLocked={isWizardTerminalOpen}
         />
