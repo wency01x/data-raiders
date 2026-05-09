@@ -111,6 +111,7 @@ class GameState:
         self.allowed_spells: list[str] = ["SELECT", "DELETE"]
         self.game_phase: str = "LOBBY"
         self.room_joined: bool = False
+        self.room_schema_merged: bool = False
         self._color_counter = 0
 
     @staticmethod
@@ -169,6 +170,7 @@ class GameState:
         """Load enemies from DB rows. extra_cols lists column names beyond the standard ones."""
         self.enemies.clear()
         self.room_joined = False
+        self.room_schema_merged = False
         standard = {"id", "label", "hp", "max_hp", "tile_x", "tile_y", "alive", "depends_on"}
         for row in rows:
             raw_dep = row["depends_on"] or ""
@@ -260,6 +262,7 @@ class GameState:
             "allowed_spells": self.allowed_spells,
             "room_cleared":   self.is_room_cleared(),
             "room_joined":    self.room_joined,
+            "room_schema_merged": self.room_schema_merged,
             "targets_remaining": self.targets_remaining,
             "game_phase":     self.game_phase,
         }
