@@ -733,7 +733,7 @@ export default function GameCanvas({ ws, gameState, myId, attacks, onRequestQuit
 
       // Role badge in HUD
       const roleBadgeX = sx + 6;
-      const roleLabel = currentCanQueryRole ? " QUERY" : " DELETER";
+      const roleLabel = currentCanQueryRole ? " QUERY" : " DELETE";
       const roleColor = currentCanQueryRole ? "#38bdf8" : "#f87171";
       const roleBg    = currentCanQueryRole ? "rgba(30,58,95,0.9)" : "rgba(59,31,31,0.9)";
       ctx.fillStyle = roleBg;
