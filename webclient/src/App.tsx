@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from "react";
+import { useSoundboard } from "./useSoundboard";
 import GameCanvas from "./GameCanvas";
 import Editor from "@monaco-editor/react";
 import type * as Monaco from "monaco-editor";
@@ -95,6 +96,10 @@ export default function App() {
   // ── Audio State ────────────────────────────────────────────────────────
   const introAudioRef = useRef<HTMLAudioElement | null>(null);
   const ingameAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  // ── SFX / Soundboard ──────────────────────────────────────────────────
+  const [sfxVolume, setSfxVolume] = useState(80); // 0-100, matches UI default
+  const { playClick, playConfirm, playBack } = useSoundboard(sfxVolume);
 
   useEffect(() => {
     introAudioRef.current = new Audio(introMusicUrl);
@@ -563,6 +568,7 @@ export default function App() {
     return (
       <div className={`h-full w-full bg-[#1e1208] flex flex-col items-center justify-center font-sans relative overflow-hidden cursor-pointer transition-all duration-500`}
            onClick={() => {
+             playConfirm();
              if (introAudioRef.current) {
                introAudioRef.current.play().catch(() => console.log('Autoplay blocked'));
              }
@@ -596,19 +602,19 @@ export default function App() {
           
           <div className="flex flex-col gap-4 w-72 items-center">
             <button 
-              onClick={() => setView('LOBBY')}
+              onClick={() => { playConfirm(); setView('LOBBY'); }}
               className="w-full bg-[#d97706] hover:bg-[#b45309] active:bg-[#92400e] text-[#fde6b3] border-b-[6px] border-[#92400e] active:border-b-0 active:translate-y-[6px] font-pixelify tracking-widest px-6 py-4 rounded-xl text-3xl transition-all shadow-lg"
             >
               START GAME
             </button>
             <button 
-              onClick={() => setShowHowToPlay(true)}
+              onClick={() => { playClick(); setShowHowToPlay(true); }}
               className="w-full bg-[#1b5e20] hover:bg-[#14532d] active:bg-[#064e3b] text-[#86efac] border-b-[6px] border-[#064e3b] active:border-b-0 active:translate-y-[6px] font-pixelify tracking-wider px-6 py-3 rounded-xl text-2xl transition-all shadow-lg"
             >
               HOW TO PLAY
             </button>
             <button 
-              onClick={() => setShowSettings(true)}
+              onClick={() => { playClick(); setShowSettings(true); }}
               className="w-full bg-[#5c3e21] hover:bg-[#784f2b] active:bg-[#3e240f] text-[#d4b483] border-b-[6px] border-[#3e240f] active:border-b-0 active:translate-y-[6px] font-pixelify tracking-wider px-6 py-3 rounded-xl text-2xl transition-all shadow-lg"
             >
               SETTINGS
@@ -678,7 +684,7 @@ export default function App() {
               </div>
 
               <button 
-                onClick={() => setShowHowToPlay(false)}
+                onClick={() => { playBack(); setShowHowToPlay(false); }}
                 className="bg-[#d97706] hover:bg-[#b45309] active:bg-[#92400e] text-[#fde6b3] border-b-[4px] border-[#92400e] active:border-b-0 active:translate-y-[4px] font-bold px-4 py-3 rounded-lg mt-2 transition-all tracking-wider text-sm shrink-0"
               >
                 GOT IT!
@@ -708,12 +714,19 @@ export default function App() {
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-[#fde6b3] mb-1 tracking-wider">SFX VOLUME</label>
-                  <input type="range" min="0" max="100" defaultValue="80" className="w-full accent-[#d97706] cursor-pointer" />
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={sfxVolume}
+                    onChange={(e) => setSfxVolume(Number(e.target.value))}
+                    className="w-full accent-[#d97706] cursor-pointer"
+                  />
                 </div>
 
               </div>
               <button 
-                onClick={() => setShowSettings(false)}
+                onClick={() => { playConfirm(); setShowSettings(false); }}
                 className="bg-[#d97706] hover:bg-[#b45309] active:bg-[#92400e] text-[#fde6b3] border-b-[4px] border-[#92400e] active:border-b-0 active:translate-y-[4px] font-bold px-4 py-3 rounded-lg mt-2 transition-all tracking-wider text-sm"
               >
                 SAVE & CLOSE
@@ -802,6 +815,7 @@ export default function App() {
                 <button
                   key={role.value}
                   onClick={() => {
+                    playClick();
                     setPlayerClass(role.value);
                     setJoinNeedsRoleChange(false);
                     setLobbyError('');
@@ -834,14 +848,14 @@ export default function App() {
             <div className="bg-[#450a0a] border-2 border-[#dc2626] rounded-xl px-4 py-3 flex items-center gap-3 max-w-2xl mx-auto w-full">
               <span className="text-xl">⚠️</span>
               <p className="text-[#fca5a5] font-bold text-sm flex-1">{lobbyError}</p>
-              <button onClick={() => setLobbyError('')} className="text-[#fca5a5] hover:text-white text-lg leading-none">×</button>
+              <button onClick={() => { playBack(); setLobbyError(''); }} className="text-[#fca5a5] hover:text-white text-lg leading-none">×</button>
             </div>
           )}
 
           {/* Mode Tab Switcher */}
           <div className={`flex gap-0 bg-[#2e1d0d] border-[4px] border-[#1e1208] rounded-2xl p-1.5 max-w-2xl w-full mx-auto ${shouldConnect ? 'opacity-50 pointer-events-none' : ''}`}>
             <button
-              onClick={() => { setLobbyMode('create'); setLobbyError(''); pingLocalServer(); }}
+              onClick={() => { playClick(); setLobbyMode('create'); setLobbyError(''); pingLocalServer(); }}
               className={`flex-1 py-3 rounded-xl font-pixelify tracking-widest text-lg transition-all ${
                 lobbyMode === 'create'
                   ? 'bg-[#4ade80] text-[#064e3b] shadow-[0_0_15px_rgba(74,222,128,0.5)] border-b-[4px] border-[#16a34a]'
@@ -851,7 +865,7 @@ export default function App() {
               🏰 CREATE LOBBY
             </button>
             <button
-              onClick={() => { setLobbyMode('join'); setLobbyError(''); setJoinInfo(null); setJoinError(''); }}
+              onClick={() => { playClick(); setLobbyMode('join'); setLobbyError(''); setJoinInfo(null); setJoinError(''); }}
               className={`flex-1 py-3 rounded-xl font-pixelify tracking-widest text-lg transition-all ${
                 lobbyMode === 'join'
                   ? 'bg-[#38bdf8] text-[#0c4a6e] shadow-[0_0_15px_rgba(56,189,248,0.5)] border-b-[4px] border-[#0369a1]'
@@ -911,7 +925,7 @@ export default function App() {
                           <div className="text-center py-2">
                             <p className="text-[10px] text-[#fca5a5] font-semibold text-center mb-2"> Lobby is already open by another player.</p>
                             <button
-                              onClick={() => { setLobbyMode('join'); setLobbyError(''); setJoinInfo(null); setJoinError(''); }}
+                              onClick={() => { playClick(); setLobbyMode('join'); setLobbyError(''); setJoinInfo(null); setJoinError(''); }}
                               className="w-full bg-[#0369a1] hover:bg-[#0284c7] active:bg-[#075985] text-white border-b-[4px] border-[#075985] active:border-b-0 active:translate-y-[4px] font-pixelify tracking-widest py-3 rounded-xl text-lg transition-all shadow-[0_0_15px_rgba(3,105,161,0.4)]"
                             >
                               JOIN EXISTING LOBBY ➔
@@ -922,7 +936,7 @@ export default function App() {
                           <>
                             <p className="text-[10px] text-[#fca5a5] text-center font-semibold"> Lobby is closed — friends cannot join yet.</p>
                             <button
-                              onClick={openLobby}
+                              onClick={() => { playConfirm(); openLobby(); }}
                               disabled={isOpening}
                               className="w-full bg-[#d97706] hover:bg-[#b45309] active:bg-[#92400e] disabled:opacity-60 text-[#fde6b3] border-b-[4px] border-[#92400e] active:border-b-0 active:translate-y-[4px] font-pixelify tracking-widest py-3 rounded-xl text-lg transition-all shadow-[0_0_15px_rgba(217,119,6,0.4)]"
                             >
@@ -936,7 +950,7 @@ export default function App() {
                       <div className="text-center py-2">
                         <p className="text-xs text-[#fca5a5] font-mono">Could not detect local server.</p>
                         <p className="text-[10px] text-[#d4b483] mt-1">Make sure <code className="bg-[#1e1208] px-1 rounded">python3 runserver.py</code> is running.</p>
-                        <button onClick={pingLocalServer} className="mt-3 text-xs bg-[#3e240f] hover:bg-[#523315] text-[#d4b483] px-4 py-1.5 rounded-lg border border-[#2e1d0d] transition-colors">
+                        <button onClick={() => { playClick(); pingLocalServer(); }} className="mt-3 text-xs bg-[#3e240f] hover:bg-[#523315] text-[#d4b483] px-4 py-1.5 rounded-lg border border-[#2e1d0d] transition-colors">
                           Retry
                         </button>
                       </div>
@@ -947,11 +961,11 @@ export default function App() {
 
                   {!ws && (
                     <div className="flex gap-4">
-                      <button onClick={() => setView('TITLE')}
+                      <button onClick={() => { playBack(); setView('TITLE'); }}
                         className="flex-1 bg-[#5c3e21] hover:bg-[#3e240f] text-[#d4b483] border-b-[4px] border-[#3e240f] active:border-b-0 active:translate-y-[4px] font-pixelify tracking-wider px-6 py-4 rounded-xl text-xl transition-all">
                         ← BACK
                       </button>
-                      <button onClick={() => setShouldConnect(true)} disabled={!hostInfo || !lobbyIsOpen || !amIHost || selectedRoleTaken}
+                      <button onClick={() => { playConfirm(); setShouldConnect(true); }} disabled={!hostInfo || !lobbyIsOpen || !amIHost || selectedRoleTaken}
                         className="flex-grow-[2] bg-[#4ade80] hover:bg-[#22c55e] active:bg-[#16a34a] disabled:bg-[#3e240f] disabled:text-[#6b4c2a] disabled:cursor-not-allowed text-[#064e3b] border-b-[4px] border-[#16a34a] active:border-b-0 active:translate-y-[4px] font-pixelify tracking-widest px-8 py-4 rounded-xl text-xl transition-all shadow-[0_0_20px_rgba(74,222,128,0.4)]">
                         {!hostInfo ? 'SERVER NOT FOUND' : selectedRoleTaken ? 'CHANGE ROLE FIRST' : (!lobbyIsOpen || !amIHost) ? '🔒 WAIT FOR HOST' : 'START AS HOST ➔'}
                       </button>
@@ -972,7 +986,7 @@ export default function App() {
                         placeholder="Ask your friend for their IP →"
                         className="flex-1 min-w-0 bg-[#2e1d0d] border-[3px] border-[#1e1208] rounded px-3 py-2 text-sm font-mono text-[#4ade80] placeholder-[#784f2b] focus:outline-none focus:border-[#38bdf8] transition-colors shadow-inner"
                       />
-                      <button onClick={() => pingJoinServer(joinIp)} disabled={isJoinPinging || !joinIp.trim()}
+                      <button onClick={() => { playClick(); pingJoinServer(joinIp); }} disabled={isJoinPinging || !joinIp.trim()}
                         className="bg-[#0369a1] hover:bg-[#0284c7] active:bg-[#075985] text-white font-black px-4 py-2 rounded-lg text-xs transition-colors disabled:opacity-50 border-b-[3px] border-[#075985] active:border-b-0 active:translate-y-[3px]">
                         {isJoinPinging ? '⏳...' : 'PING'}
                       </button>
@@ -1005,11 +1019,11 @@ export default function App() {
 
                   {!ws && (
                     <div className="flex gap-4">
-                      <button onClick={() => setView('TITLE')}
+                      <button onClick={() => { playBack(); setView('TITLE'); }}
                         className="flex-1 bg-[#5c3e21] hover:bg-[#3e240f] text-[#d4b483] border-b-[4px] border-[#3e240f] active:border-b-0 active:translate-y-[4px] font-pixelify tracking-wider px-6 py-4 rounded-xl text-xl transition-all">
                         ← BACK
                       </button>
-                      <button onClick={() => setShouldConnect(true)} disabled={!joinInfo || !joinInfo.open || selectedRoleTaken}
+                      <button onClick={() => { playConfirm(); setShouldConnect(true); }} disabled={!joinInfo || !joinInfo.open || selectedRoleTaken}
                         className="flex-grow-[2] bg-[#d97706] hover:bg-[#b45309] active:bg-[#92400e] disabled:bg-[#5c3e21] disabled:text-[#6b4c2a] disabled:border-[#3e240f] disabled:cursor-not-allowed text-[#fde6b3] border-b-[4px] border-[#92400e] active:border-b-0 active:translate-y-[4px] font-pixelify tracking-widest px-8 py-4 rounded-xl text-xl transition-all shadow-[0_0_20px_rgba(217,119,6,0.4)]">
                         {!joinInfo ? 'PING FIRST...' : selectedRoleTaken ? 'CHANGE ROLE FIRST' : !joinInfo.open ? '🔒 LOBBY CLOSED' : 'JOIN SERVER ➔'}
                       </button>
@@ -1037,7 +1051,7 @@ export default function App() {
                   )}
                   <h2 className="text-[#4ade80] text-xs font-black tracking-widest border-b-2 border-[#523315] pb-2 flex items-center justify-between">
                     <span>CONNECTED RAIDERS ({onlineCount})</span>
-                    <button onClick={() => { setWs(null); setShouldConnect(false); window.location.reload(); }} className="text-[#d4b483] hover:text-[#fca5a5] text-[10px]">Disconnect</button>
+                    <button onClick={() => { playBack(); setWs(null); setShouldConnect(false); window.location.reload(); }} className="text-[#d4b483] hover:text-[#fca5a5] text-[10px]">Disconnect</button>
                   </h2>
 
                   {/* Role coordination panel */}
@@ -1090,7 +1104,7 @@ export default function App() {
                   </div>
 
                   {lobbyMode === 'create' && (
-                    <button onClick={() => ws?.send(JSON.stringify({ type: "start_game" }))}
+                    <button onClick={() => { playConfirm(); ws?.send(JSON.stringify({ type: "start_game" })); }}
                       className="w-full mt-1 bg-[#d97706] hover:bg-[#b45309] active:bg-[#92400e] text-[#fde6b3] border-b-[6px] border-[#92400e] active:border-b-0 active:translate-y-[6px] font-pixelify tracking-widest px-6 py-4 rounded-xl text-3xl transition-all shadow-[0_0_20px_rgba(217,119,6,0.4)]">
                       START ADVENTURE!
                     </button>
@@ -1449,14 +1463,14 @@ export default function App() {
             <div className="flex flex-col gap-2 mb-2">
               <button
                 type="button"
-                onClick={() => setShowSqlModal(true)}
+                onClick={() => { playClick(); setShowSqlModal(true); }}
                 className="w-full bg-[#2e1d0d] border-[3px] border-[#1e1208] rounded px-3 py-2 text-sm font-mono text-left text-[#4ade80] hover:border-[#4ade80] transition-colors shadow-inner flex items-center gap-2"
               >
                 <span className="text-[#4ade80] font-bold">»</span>
                 <span className="truncate">{sqlPreview}</span>
               </button>
               <button
-                onClick={() => setShowSqlModal(true)}
+                onClick={() => { playClick(); setShowSqlModal(true); }}
                 className="bg-[#d97706] hover:bg-[#b45309] active:bg-[#92400e] text-[#fde6b3] border-b-[4px] border-[#92400e] active:border-b-0 active:translate-y-[4px] font-black tracking-wider px-3 py-2 rounded-lg text-sm transition-all focus:outline-none"
               >
                 OPEN SQL EDITOR
@@ -1470,13 +1484,13 @@ export default function App() {
                 <h3 className="text-[11px] font-black tracking-widest text-[#4ade80]">WIZARD SQL TERMINAL</h3>
                 <span className="text-[9px] text-[#d4b483] font-bold ml-auto">SQL</span>
                 <button
-                  onClick={() => sendQuery()}
+                  onClick={() => { playConfirm(); sendQuery(); }}
                   className="bg-[#d97706] hover:bg-[#b45309] active:bg-[#92400e] text-[#fde6b3] border-b-[3px] border-[#92400e] active:border-b-0 active:translate-y-[3px] font-black tracking-wide px-2.5 py-1 rounded text-[10px] transition-all"
                 >
                   RUN
                 </button>
                 <button
-                  onClick={() => setShowSqlModal(false)}
+                  onClick={() => { playBack(); setShowSqlModal(false); }}
                   className="bg-[#5c3e21] hover:bg-[#3e240f] text-[#d4b483] border-b-[3px] border-[#3e240f] active:border-b-0 active:translate-y-[3px] font-black tracking-wide px-2.5 py-1 rounded text-[10px] transition-all"
                 >
                   CLOSE
@@ -1524,7 +1538,7 @@ export default function App() {
               LOGS
             </h2>
             <button
-              onClick={() => setMessages([])}
+              onClick={() => { playClick(); setMessages([]); }}
               className="text-[10px] text-[#fde6b3] font-bold bg-[#523315] hover:bg-[#3e240f] px-2.5 py-1 rounded shadow-inner transition-colors cursor-pointer"
             >
               Clear
@@ -1560,7 +1574,7 @@ export default function App() {
               className="flex-1 min-w-0 bg-[#2e1d0d] border-[2px] border-[#1e1208] rounded px-3 py-1.5 text-xs text-[#fde6b3] font-medium focus:outline-none focus:border-[#d97706] transition-colors shadow-inner"
             />
             <button
-              onClick={sendChat}
+              onClick={() => { playClick(); sendChat(); }}
               className="bg-[#d97706] hover:bg-[#b45309] active:bg-[#92400e] text-[#fde6b3] font-bold px-3 py-1.5 rounded text-xs transition-colors cursor-pointer"
             >
               Send
@@ -1641,7 +1655,7 @@ export default function App() {
             </div>
             <div className="flex gap-3 shrink-0 mt-4 md:mt-0">
               <button 
-                onClick={() => setTutorialStep(0)}
+                onClick={() => { playBack(); setTutorialStep(0); }}
                 className="bg-[#5c3e21] hover:bg-[#3e240f] text-[#d4b483] border-b-[6px] border-[#3e240f] active:border-b-0 active:translate-y-[6px] font-pixelify tracking-widest px-6 py-4 rounded-xl text-2xl transition-all shadow-lg"
               >
                 SKIP
@@ -1649,8 +1663,10 @@ export default function App() {
               <button 
                 onClick={() => {
                   if (tutorialStep === 6) {
+                    playConfirm();
                     setTutorialStep(0);
                   } else {
+                    playClick();
                     setTutorialStep(s => s + 1);
                   }
                 }}
@@ -1673,13 +1689,14 @@ export default function App() {
             </div>
             <div className="flex gap-3 mt-2">
               <button 
-                onClick={() => setShowQuitConfirm(false)}
+                onClick={() => { playBack(); setShowQuitConfirm(false); }}
                 className="flex-1 bg-[#5c3e21] hover:bg-[#3e240f] text-[#d4b483] border-b-[4px] border-[#3e240f] active:border-b-0 active:translate-y-[4px] font-bold py-3 rounded-lg transition-all text-sm"
               >
                 CANCEL
               </button>
               <button 
                 onClick={() => {
+                  playBack();
                   setShowQuitConfirm(false);
                   leaveLobby();
                   setView('TITLE');
@@ -1740,6 +1757,7 @@ export default function App() {
             </p>
             <button
               onClick={async () => {
+                playBack();
                 setShowGameOver(false);
                 setShowDeathScreen(false);
                 await leaveLobby();
