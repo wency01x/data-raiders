@@ -206,25 +206,47 @@ export default function App() {
   const [showCharacterPicker, setShowCharacterPicker] = useState(false);
   const [gameMode, setGameMode] = useState("Standard");
 
+  const pickAvailableJoinRole = () => {
+    const taken = new Set<string>(Array.isArray(joinInfo?.taken_roles) ? joinInfo.taken_roles : []);
+    if (!taken.has(playerClass)) return playerClass;
+
+    const fallback = ROLE_OPTIONS.find((r) => !taken.has(r.value))?.value;
+    return fallback ?? playerClass;
+  };
+
   useEffect(() => {
     if (!showCharacterPicker) return;
+
+    const takenRoles = new Set<string>();
+    if (ws && gameState?.players) {
+      for (const p of gameState.players) {
+        const role = p?.name?.split('|')?.[1];
+        if (!role) continue;
+        if (p.id !== myId) takenRoles.add(role);
+      }
+    } else if (lobbyMode === 'join' && Array.isArray(joinInfo?.taken_roles)) {
+      for (const role of joinInfo.taken_roles) takenRoles.add(role);
+    }
+
+    const selectableRoles = ROLE_PICKER_CARDS.filter((c) => !takenRoles.has(c.value));
+    if (selectableRoles.length === 0) return;
 
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
       e.preventDefault();
 
-      const currentIdx = ROLE_PICKER_CARDS.findIndex((c) => c.value === playerClass);
+      const currentIdx = selectableRoles.findIndex((c) => c.value === playerClass);
       const startIdx = currentIdx >= 0 ? currentIdx : 0;
       const delta = e.key === 'ArrowRight' ? 1 : -1;
-      const nextIdx = (startIdx + delta + ROLE_PICKER_CARDS.length) % ROLE_PICKER_CARDS.length;
-      setPlayerClass(ROLE_PICKER_CARDS[nextIdx].value);
+      const nextIdx = (startIdx + delta + selectableRoles.length) % selectableRoles.length;
+      setPlayerClass(selectableRoles[nextIdx].value);
       setJoinNeedsRoleChange(false);
       setLobbyError('');
     };
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [showCharacterPicker, playerClass]);
+  }, [showCharacterPicker, playerClass, ws, gameState, myId, lobbyMode, joinInfo]);
 
   // ── Audio Playback Management ──────────────────────────────────────────
   const syncMusic = () => {
@@ -803,8 +825,6 @@ export default function App() {
     };
 
     const selectedRoleTaken = !ws && joinNeedsRoleChange;
-    const availableRoles = ROLE_OPTIONS.filter((r) => r.value !== playerClass);
-
     // Shared player setup block — class picker locked once connected
     const PlayerSetup = (
       <div className="bg-[#784f2b] border-[3px] border-[#523315] rounded-xl p-4 flex flex-col gap-3">
@@ -832,29 +852,6 @@ export default function App() {
             ]}
           />
         </div>
-        {!ws && selectedRoleTaken && (
-          <div className="bg-[#450a0a] border-2 border-[#dc2626] rounded-lg p-3">
-            <p className="text-[#fca5a5] text-xs font-bold tracking-wide">
-              Selected role is already taken on this server. Change role to continue.
-            </p>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {availableRoles.map((role) => (
-                <button
-                  key={role.value}
-                  onClick={() => {
-                    playClick();
-                    setPlayerClass(role.value);
-                    setJoinNeedsRoleChange(false);
-                    setLobbyError('');
-                  }}
-                  className="bg-[#3e240f] hover:bg-[#523315] text-[#fde6b3] border border-[#2e1d0d] px-2.5 py-1 rounded text-[10px] font-black tracking-wide transition-colors"
-                >
-                  {role.icon} Change to {role.value}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
     );
 
@@ -1050,9 +1047,18 @@ export default function App() {
                         className="flex-1 bg-[#5c3e21] hover:bg-[#3e240f] text-[#d4b483] border-b-[4px] border-[#3e240f] active:border-b-0 active:translate-y-[4px] font-pixelify tracking-wider px-6 py-4 rounded-xl text-xl transition-all">
                         ← BACK
                       </button>
-                      <button onClick={() => { playConfirm(); setShouldConnect(true); }} disabled={!joinInfo || !joinInfo.open || selectedRoleTaken}
+                      <button onClick={() => {
+                        playConfirm();
+                        const nextRole = pickAvailableJoinRole();
+                        if (nextRole !== playerClass) {
+                          setPlayerClass(nextRole);
+                          setJoinNeedsRoleChange(false);
+                          setLobbyError('');
+                        }
+                        setShouldConnect(true);
+                      }} disabled={!joinInfo || !joinInfo.open}
                         className="flex-grow-[2] bg-[#d97706] hover:bg-[#b45309] active:bg-[#92400e] disabled:bg-[#5c3e21] disabled:text-[#6b4c2a] disabled:border-[#3e240f] disabled:cursor-not-allowed text-[#fde6b3] border-b-[4px] border-[#92400e] active:border-b-0 active:translate-y-[4px] font-pixelify tracking-widest px-8 py-4 rounded-xl text-xl transition-all shadow-[0_0_20px_rgba(217,119,6,0.4)]">
-                        {!joinInfo ? 'PING FIRST...' : selectedRoleTaken ? 'CHANGE ROLE FIRST' : !joinInfo.open ? '🔒 LOBBY CLOSED' : 'JOIN SERVER ➔'}
+                        {!joinInfo ? 'PING FIRST...' : !joinInfo.open ? '🔒 LOBBY CLOSED' : 'JOIN SERVER ➔'}
                       </button>
                     </div>
                   )}
@@ -1130,15 +1136,13 @@ export default function App() {
                     </div>
                   </div>
 
-                  {lobbyMode === 'join' && (
-                    <button
-                      type="button"
-                      onClick={() => { playClick(); setShowCharacterPicker(true); }}
-                      className="w-full min-h-[64px] bg-[#523315] hover:bg-[#6b4c2a] active:bg-[#3e240f] text-[#fde6b3] border-b-[4px] border-[#2e1d0d] active:border-b-0 active:translate-y-[4px] rounded-xl font-pixelify tracking-widest text-2xl transition-all"
-                    >
-                      SELECT CHARACTER
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => { playClick(); setShowCharacterPicker(true); }}
+                    className="w-full min-h-[64px] bg-[#523315] hover:bg-[#6b4c2a] active:bg-[#3e240f] text-[#fde6b3] border-b-[4px] border-[#2e1d0d] active:border-b-0 active:translate-y-[4px] rounded-xl font-pixelify tracking-widest text-2xl transition-all"
+                  >
+                    SELECT CHARACTER
+                  </button>
 
                   {lobbyMode === 'create' && (
                     <button onClick={() => { playConfirm(); ws?.send(JSON.stringify({ type: "start_game" })); }}
@@ -1153,8 +1157,8 @@ export default function App() {
           </div>
 
           {showCharacterPicker && (
-            <div className="fixed inset-0 z-[80] bg-[#1e1208] flex items-center justify-center px-4">
-              <div className="w-full max-w-[980px] h-[78vh] max-h-[760px] min-h-[560px] bg-[#1f0b00] flex flex-col items-center px-8 md:px-12 pt-10 md:pt-12 pb-8 md:pb-10">
+            <div className="fixed inset-0 z-[80] bg-scrolling-grid flex items-center justify-center px-4">
+              <div className="pixel-panel w-full max-w-[980px] h-[78vh] max-h-[760px] min-h-[560px] bg-[#1f0b00] flex flex-col items-center px-8 md:px-12 pt-10 md:pt-12 pb-8 md:pb-10">
                 <h2 className="text-center text-5xl md:text-7xl font-pixelify text-[#fde6b3] tracking-wider drop-shadow-[0_0_10px_rgba(253,230,179,0.4)]">
                   SELECT CHARACTER
                 </h2>
@@ -1162,17 +1166,23 @@ export default function App() {
                 <div className="mt-16 md:mt-18 w-full flex items-end justify-center gap-8 md:gap-12 min-h-[320px]">
                   {ROLE_PICKER_CARDS.map((card) => {
                     const isSelected = playerClass === card.value;
+                    const isTaken = (
+                      (ws && gameState?.players?.some((p: any) => p.id !== myId && p.name?.endsWith(`|${card.value}`)))
+                      || (!ws && lobbyMode === 'join' && Array.isArray(joinInfo?.taken_roles) && joinInfo.taken_roles.includes(card.value))
+                    );
                     return (
                       <div key={card.value} className="flex flex-col items-center">
                         <button
                           type="button"
                           onClick={() => {
+                            if (isTaken) return;
                             playClick();
                             setPlayerClass(card.value);
                             setJoinNeedsRoleChange(false);
                             setLobbyError('');
                           }}
                           className="outline-none"
+                          disabled={isTaken}
                         >
                           <div className="w-[210px] h-[210px] md:w-[240px] md:h-[240px] flex items-start justify-center">
                             <div className="relative h-[210px] w-[210px] md:h-[240px] md:w-[240px] overflow-hidden role-idle-breath-wrap">
@@ -1202,9 +1212,14 @@ export default function App() {
                             </div>
                           </div>
                         </button>
-                        <p className={`mt-0 text-4xl md:text-5xl font-pixelify tracking-wide leading-none transition-colors ${isSelected ? 'text-[#22c55e]' : 'text-[#f3f4f6]'}`}>
+                        <p className={`mt-0 text-4xl md:text-5xl font-pixelify tracking-wide leading-none transition-colors ${isTaken ? 'text-[#ef4444]' : isSelected ? 'text-[#22c55e]' : 'text-[#f3f4f6]'}`}>
                           {card.title}
                         </p>
+                        <div className="min-h-[14px] mt-0.5 flex items-center justify-center">
+                          <p className={`text-[10px] font-pixelify tracking-wider ${isTaken ? 'text-[#ef4444]' : 'text-transparent select-none'}`}>
+                            TAKEN
+                          </p>
+                        </div>
                       </div>
                     );
                   })}
