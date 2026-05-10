@@ -99,7 +99,7 @@ export default function App() {
 
   // ── SFX / Soundboard ──────────────────────────────────────────────────
   const [sfxVolume, setSfxVolume] = useState(80); // 0-100, matches UI default
-  const { playClick, playConfirm, playBack } = useSoundboard(sfxVolume);
+  const { playClick, playConfirm, playBack, setVolume } = useSoundboard(sfxVolume);
 
   useEffect(() => {
     introAudioRef.current = new Audio(introMusicUrl);
@@ -719,7 +719,12 @@ export default function App() {
                     min="0"
                     max="100"
                     value={sfxVolume}
-                    onChange={(e) => setSfxVolume(Number(e.target.value))}
+                    onChange={(e) => {
+                      const val = Number(e.target.value);
+                      setVolume(val);   // update ref immediately so playClick hears the new volume
+                      setSfxVolume(val);
+                      playClick();      // preview the SFX at the new volume
+                    }}
                     className="w-full accent-[#d97706] cursor-pointer"
                   />
                 </div>
