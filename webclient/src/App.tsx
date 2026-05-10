@@ -25,6 +25,7 @@ const ROLE_PICKER_CARDS = [
     glow: "shadow-[0_0_24px_rgba(239,68,68,0.5)]",
     border: "border-[#ef4444]",
     badge: "text-[#fca5a5] bg-[#3b1f1f]",
+    frames: 6,
   },
   {
     value: "Swordsman",
@@ -34,6 +35,7 @@ const ROLE_PICKER_CARDS = [
     glow: "shadow-[0_0_24px_rgba(245,158,11,0.55)]",
     border: "border-[#f59e0b]",
     badge: "text-[#fcd34d] bg-[#3e240f]",
+    frames: 8,
   },
   {
     value: "Wizard",
@@ -43,6 +45,7 @@ const ROLE_PICKER_CARDS = [
     glow: "shadow-[0_0_24px_rgba(56,189,248,0.55)]",
     border: "border-[#38bdf8]",
     badge: "text-[#bae6fd] bg-[#1e3a5f]",
+    frames: 6,
   },
 ] as const;
 
@@ -202,6 +205,26 @@ export default function App() {
   const [playerClass, setPlayerClass] = useState("Archer");
   const [showCharacterPicker, setShowCharacterPicker] = useState(false);
   const [gameMode, setGameMode] = useState("Standard");
+
+  useEffect(() => {
+    if (!showCharacterPicker) return;
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      e.preventDefault();
+
+      const currentIdx = ROLE_PICKER_CARDS.findIndex((c) => c.value === playerClass);
+      const startIdx = currentIdx >= 0 ? currentIdx : 0;
+      const delta = e.key === 'ArrowRight' ? 1 : -1;
+      const nextIdx = (startIdx + delta + ROLE_PICKER_CARDS.length) % ROLE_PICKER_CARDS.length;
+      setPlayerClass(ROLE_PICKER_CARDS[nextIdx].value);
+      setJoinNeedsRoleChange(false);
+      setLobbyError('');
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [showCharacterPicker, playerClass]);
 
   // ── Audio Playback Management ──────────────────────────────────────────
   const syncMusic = () => {
@@ -787,7 +810,7 @@ export default function App() {
       <div className="bg-[#784f2b] border-[3px] border-[#523315] rounded-xl p-4 flex flex-col gap-3">
         <h2 className="text-xs font-black text-[#ffdb7a] tracking-widest">⚔️ PLAYER SETUP</h2>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:items-end">
           <div>
             <label className="block text-[10px] font-bold text-[#fde6b3] mb-1 tracking-wider">PLAYER NAME</label>
             {ws ? (
@@ -797,42 +820,6 @@ export default function App() {
             ) : (
               <input type="text" value={playerName} onChange={(e) => setPlayerName(e.target.value)} maxLength={12}
                 className="w-full bg-[#2e1d0d] border-[3px] border-[#1e1208] rounded px-3 py-2 text-sm font-mono text-[#4ade80] focus:outline-none focus:border-[#d97706] shadow-inner" />
-            )}
-          </div>
-          <div className="relative">
-            {ws ? (
-              <div>
-                <label className="block text-[10px] font-bold text-[#fde6b3] mb-1 tracking-wider">CHARACTER CLASS (LOCKED)</label>
-                <div className="w-full bg-[#1e1208] border-[3px] border-[#2e1d0d] rounded px-3 py-2 text-sm font-bold text-[#6b4c2a] shadow-inner cursor-not-allowed flex items-center gap-2">
-                  <span>{playerClass === 'Wizard' ? '🧙' : playerClass === 'Archer' ? '🏹' : '⚔️'}</span>
-                  <span>{playerClass}</span>
-                  <span className="ml-auto text-[9px] bg-[#3e240f] text-[#d97706] px-1.5 py-0.5 rounded font-black tracking-wider">
-                    {getRoleBadgeLabel(playerClass)}
-                  </span>
-                </div>
-              </div>
-            ) : (
-              <div>
-                <label className="block text-[10px] font-bold text-[#fde6b3] mb-1 tracking-wider">CHARACTER CLASS</label>
-                <button
-                  type="button"
-                  onClick={() => { playClick(); setShowCharacterPicker(true); }}
-                  className="w-full bg-[#2e1d0d] border-[3px] border-[#1e1208] rounded px-3 py-2 text-sm font-bold text-[#facc15] shadow-inner flex items-center gap-2 hover:border-[#d97706] transition-colors"
-                >
-                  <span>{playerClass === 'Wizard' ? '🧙' : playerClass === 'Archer' ? '🏹' : '⚔️'}</span>
-                  <span className="truncate">{playerClass}</span>
-                  <span className="ml-auto text-[9px] bg-[#3e240f] text-[#d97706] px-1.5 py-0.5 rounded font-black tracking-wider">
-                    {getRoleBadgeLabel(playerClass)}
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { playClick(); setShowCharacterPicker(true); }}
-                  className="mt-2 w-full text-[10px] font-black tracking-widest bg-[#523315] hover:bg-[#6b4c2a] text-[#fde6b3] border border-[#2e1d0d] rounded py-1.5 transition-colors"
-                >
-                  CHOOSE CHARACTER
-                </button>
-              </div>
             )}
           </div>
           <CustomSelect
@@ -873,7 +860,7 @@ export default function App() {
 
     return (
       <div className={`h-full w-full bg-scrolling-grid flex flex-col items-center justify-center font-sans relative overflow-hidden ${useCRT ? 'crt' : ''}`}>
-        <div style={{ transform: `scale(${scale})` }} className="z-10 w-full max-w-5xl px-4 md:px-8 flex flex-col gap-5 origin-center">
+        <div style={{ transform: showCharacterPicker ? 'none' : `scale(${scale})` }} className="z-10 w-full max-w-5xl px-4 md:px-8 flex flex-col gap-5 origin-center">
 
           {/* Title */}
           <div className="text-center">
@@ -1143,6 +1130,16 @@ export default function App() {
                     </div>
                   </div>
 
+                  {lobbyMode === 'join' && (
+                    <button
+                      type="button"
+                      onClick={() => { playClick(); setShowCharacterPicker(true); }}
+                      className="w-full min-h-[64px] bg-[#523315] hover:bg-[#6b4c2a] active:bg-[#3e240f] text-[#fde6b3] border-b-[4px] border-[#2e1d0d] active:border-b-0 active:translate-y-[4px] rounded-xl font-pixelify tracking-widest text-2xl transition-all"
+                    >
+                      SELECT CHARACTER
+                    </button>
+                  )}
+
                   {lobbyMode === 'create' && (
                     <button onClick={() => { playConfirm(); ws?.send(JSON.stringify({ type: "start_game" })); }}
                       className="w-full mt-1 bg-[#d97706] hover:bg-[#b45309] active:bg-[#92400e] text-[#fde6b3] border-b-[6px] border-[#92400e] active:border-b-0 active:translate-y-[6px] font-pixelify tracking-widest px-6 py-4 rounded-xl text-3xl transition-all shadow-[0_0_20px_rgba(217,119,6,0.4)]">
@@ -1155,15 +1152,16 @@ export default function App() {
 
           </div>
 
-          {showCharacterPicker && !ws && (
-            <div className="fixed inset-0 z-[80] bg-[#1e1208] flex items-center justify-center">
-              <div className="w-full h-full max-w-[1920px] max-h-[1080px] flex flex-col items-center px-10 md:px-16 pt-10 md:pt-12 pb-10 md:pb-12">
+          {showCharacterPicker && (
+            <div className="fixed inset-0 z-[80] bg-[#1e1208] flex items-center justify-center px-4">
+              <div className="w-full max-w-[980px] h-[78vh] max-h-[760px] min-h-[560px] bg-[#1f0b00] flex flex-col items-center px-8 md:px-12 pt-10 md:pt-12 pb-8 md:pb-10">
                 <h2 className="text-center text-5xl md:text-7xl font-pixelify text-[#fde6b3] tracking-wider drop-shadow-[0_0_10px_rgba(253,230,179,0.4)]">
                   SELECT CHARACTER
                 </h2>
 
-                <div className="mt-18 md:mt-20 flex items-end justify-center gap-8 md:gap-12">
+                <div className="mt-16 md:mt-18 w-full flex items-end justify-center gap-8 md:gap-12 min-h-[320px]">
                   {ROLE_PICKER_CARDS.map((card) => {
+                    const isSelected = playerClass === card.value;
                     return (
                       <div key={card.value} className="flex flex-col items-center">
                         <button
@@ -1176,30 +1174,35 @@ export default function App() {
                           }}
                           className="outline-none"
                         >
-                          <div className="relative w-[210px] h-[210px] md:w-[240px] md:h-[240px] overflow-hidden flex items-start justify-start role-idle-breath-wrap">
-                            <img
-                              src={card.sprite}
-                              alt={card.title}
-                              className="h-[210px] md:h-[240px] w-auto max-w-none pixelated role-sprite-layer role-sprite-legs"
-                              draggable={false}
-                            />
-                            <img
-                              src={card.sprite}
-                              alt=""
-                              aria-hidden="true"
-                              className="h-[210px] md:h-[240px] w-auto max-w-none pixelated role-sprite-layer role-sprite-torso"
-                              draggable={false}
-                            />
-                            <img
-                              src={card.sprite}
-                              alt=""
-                              aria-hidden="true"
-                              className="h-[210px] md:h-[240px] w-auto max-w-none pixelated role-sprite-layer role-sprite-head"
-                              draggable={false}
-                            />
+                          <div className="w-[210px] h-[210px] md:w-[240px] md:h-[240px] flex items-start justify-center">
+                            <div className="relative h-[210px] w-[210px] md:h-[240px] md:w-[240px] overflow-hidden role-idle-breath-wrap">
+                              <img
+                                src={card.sprite}
+                                alt={card.title}
+                                className="h-[210px] md:h-[240px] w-auto max-w-none pixelated role-sprite-layer role-sprite-legs"
+                                style={{ ['--frame-count' as any]: card.frames }}
+                                draggable={false}
+                              />
+                              <img
+                                src={card.sprite}
+                                alt=""
+                                aria-hidden="true"
+                                className="h-[210px] md:h-[240px] w-auto max-w-none pixelated role-sprite-layer role-sprite-torso"
+                                style={{ ['--frame-count' as any]: card.frames }}
+                                draggable={false}
+                              />
+                              <img
+                                src={card.sprite}
+                                alt=""
+                                aria-hidden="true"
+                                className="h-[210px] md:h-[240px] w-auto max-w-none pixelated role-sprite-layer role-sprite-head"
+                                style={{ ['--frame-count' as any]: card.frames }}
+                                draggable={false}
+                              />
+                            </div>
                           </div>
                         </button>
-                        <p className="mt-0 text-4xl md:text-5xl font-pixelify tracking-wide text-[#d9c8bf] leading-none">
+                        <p className={`mt-0 text-4xl md:text-5xl font-pixelify tracking-wide leading-none transition-colors ${isSelected ? 'text-[#22c55e]' : 'text-[#f3f4f6]'}`}>
                           {card.title}
                         </p>
                       </div>
@@ -1207,13 +1210,17 @@ export default function App() {
                   })}
                 </div>
 
-                <div className="mt-auto mb-2 text-center">
+                <p className="mt-3 text-[#86efac] text-sm md:text-base font-pixelify tracking-wider">
+                  USE ← / → TO CHOOSE
+                </p>
+
+                <div className="mt-auto pt-6 min-h-[88px] flex items-center justify-center text-center w-full">
                   <button
                     type="button"
                     onClick={() => { playConfirm(); setShowCharacterPicker(false); }}
-                    className="font-pixelify text-5xl md:text-7xl tracking-wider text-[#efe1d4] hover:text-[#ffffff] transition-colors drop-shadow-[0_0_10px_rgba(255,255,255,0.35)]"
+                    className="font-pixelify text-3xl md:text-5xl tracking-wider text-[#efe1d4] hover:text-[#ffffff] transition-colors drop-shadow-[0_0_10px_rgba(255,255,255,0.35)]"
                   >
-                    PLAY &gt;&gt;&gt;
+                    BACK TO LOBBY
                   </button>
                 </div>
               </div>
@@ -1695,17 +1702,17 @@ export default function App() {
               SERVER STATS
             </h2>
             <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[10px] font-mono">
-              <span className="text-[#86efac]">Players</span>
+              <span className="text-[#22c55e]">Players</span>
               <span className="text-[#fde6b3] text-right">{serverStats.players_online}</span>
-              <span className="text-[#86efac]">Tick Rate</span>
+              <span className="text-[#22c55e]">Tick Rate</span>
               <span className="text-[#fde6b3] text-right">{serverStats.tick_rate} Hz</span>
-              <span className="text-[#86efac]">Queue</span>
+              <span className="text-[#22c55e]">Queue</span>
               <span className="text-[#fde6b3] text-right">{serverStats.event_queue_size} pending</span>
-              <span className="text-[#86efac]">Events</span>
+              <span className="text-[#22c55e]">Events</span>
               <span className="text-[#fde6b3] text-right">{serverStats.events_processed} total</span>
-              <span className="text-[#86efac]">Uptime</span>
+              <span className="text-[#22c55e]">Uptime</span>
               <span className="text-[#fde6b3] text-right">{Math.floor(serverStats.uptime_seconds / 60)}m {serverStats.uptime_seconds % 60}s</span>
-              <span className="text-[#86efac]">Room</span>
+              <span className="text-[#22c55e]">Room</span>
               <span className="text-[#fde6b3] text-right">{serverStats.room_number}/5</span>
             </div>
           </div>
