@@ -16,6 +16,11 @@ export function useSoundboard(sfxVolume: number) {
 
   const ctxRef = useRef<AudioContext | null>(null);
 
+  // Store volume in a ref so playTone always reads the latest value at
+  // call-time, even before React has committed the next re-render.
+  const sfxVolumeRef = useRef(sfxVolume);
+  sfxVolumeRef.current = sfxVolume; // kept in sync on every render
+
   const getCtx = useCallback((): AudioContext => {
     if (!ctxRef.current || ctxRef.current.state === "closed") {
       ctxRef.current = new AudioContext();
@@ -26,7 +31,11 @@ export function useSoundboard(sfxVolume: number) {
     return ctxRef.current;
   }, []);
 
-  const gain = sfxVolume / 100;
+  /** Imperatively set volume — useful when you need to play a preview
+   *  sound in the same event handler that also calls setSfxVolume(). */
+  const setVolume = useCallback((v: number) => {
+    sfxVolumeRef.current = v;
+  }, []);
 
   /** Internal: play a synthesised tone */
   const playTone = useCallback(
@@ -37,6 +46,8 @@ export function useSoundboard(sfxVolume: number) {
       type?: OscillatorType;
       gainPeak?: number;
     }) => {
+      // Read gain from ref at the moment of the call — always up-to-date.
+      const gain = sfxVolumeRef.current / 100;
       if (gain <= 0) return;
       try {
         const ctx = getCtx();
@@ -63,7 +74,7 @@ export function useSoundboard(sfxVolume: number) {
         // AudioContext unavailable — silent fail
       }
     },
-    [gain, getCtx]
+    [getCtx] // gain is now read from ref at call-time — no longer a dep
   );
 
   /** Soft UI click — use on most buttons */
@@ -90,5 +101,5 @@ export function useSoundboard(sfxVolume: number) {
     playTone({ freq: 180, endFreq: 140, duration: 0.15, type: "sawtooth", gainPeak: 0.12 });
   }, [playTone]);
 
-  return { playClick, playConfirm, playBack, playError };
+  return { playClick, playConfirm, playBack, playError, setVolume };
 }
