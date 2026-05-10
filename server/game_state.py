@@ -248,11 +248,18 @@ class GameState:
                 p.score += amount
 
     def snapshot(self) -> dict:
+        taken_roles = sorted({
+            role
+            for p in self.players.values()
+            for role in p.roles
+            if role
+        })
         return {
             "type":       "state",
             "players":    [p.to_dict() for p in self.players.values()],
             "enemies":    [e.to_dict() for e in self.enemies.values() if e.alive],
             "loot":       [l.to_dict() for l in self.loot.values()],
+            "taken_roles": taken_roles,
             "room":       self.current_room,
             "room_number": self.room_number,
             "brief":      self.room_brief,
