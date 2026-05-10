@@ -82,3 +82,63 @@ body {
   0%   { opacity: 0; }
   100% { opacity: 1; }
 }
+
+@keyframes roleTorsoBreath {
+  0%, 100% {
+    transform: translate3d(0, 0, 0) scaleY(1);
+  }
+  30% {
+    transform: translate3d(0, -1px, 0) scaleY(1.01);
+  }
+  55% {
+    transform: translate3d(0, -1px, 0) scaleY(1.015);
+  }
+  80% {
+    transform: translate3d(0, 0, 0) scaleY(1);
+  }
+}
+
+@keyframes roleHeadBreath {
+  0%, 100% {
+    transform: translate3d(0, 0, 0);
+  }
+  45% {
+    transform: translate3d(0, -1px, 0);
+  }
+  70% {
+    transform: translate3d(0, -1px, 0);
+  }
+  85% {
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.role-idle-breath-wrap {
+  position: relative;
+}
+
+.role-sprite-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: center bottom;
+  will-change: transform;
+}
+
+.role-sprite-legs {
+  clip-path: inset(68% 0 0 0);
+}
+
+.role-sprite-torso {
+  clip-path: inset(34% 0 26% 0);
+  animation: roleTorsoBreath 1.6s steps(4, end) infinite;
+}
+
+.role-sprite-head {
+  clip-path: inset(0 0 64% 0);
+  animation: roleHeadBreath 1.6s steps(4, end) infinite;
+}
+
+.pixelated {
+  image-rendering: pixelated;
+}
