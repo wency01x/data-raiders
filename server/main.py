@@ -240,7 +240,7 @@ async def websocket_endpoint(ws: WebSocket):
         player_name = msg.get("player_name", "Anonymous")
         chosen_role = _extract_role(player_name)
 
-        if chosen_role not in VALID_ROLES:
+        if chosen_role and chosen_role not in VALID_ROLES:
             await ws.send_json({
                 "type": "lobby_error",
                 "message": "Unable to join lobby with the selected role. Please change role and try again.",
@@ -253,7 +253,7 @@ async def websocket_endpoint(ws: WebSocket):
             taken_roles = {
                 r for r in (_extract_role(p.name) for p in state.players.values()) if r
             }
-        if chosen_role in taken_roles:
+        if chosen_role and chosen_role in taken_roles:
             await ws.send_json({
                 "type": "lobby_error",
                 "message": "Unable to join lobby with the selected role. Please change role and try again.",
