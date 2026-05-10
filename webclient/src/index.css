@@ -142,3 +142,21 @@ body {
 .pixelated {
   image-rendering: pixelated;
 }
+
+.pixel-panel {
+  /* Pixel-cut corners for an 8-bit panel silhouette */
+  clip-path: polygon(
+    0 14px,
+    14px 14px,
+    14px 0,
+    calc(100% - 14px) 0,
+    calc(100% - 14px) 14px,
+    100% 14px,
+    100% calc(100% - 14px),
+    calc(100% - 14px) calc(100% - 14px),
+    calc(100% - 14px) 100%,
+    14px 100%,
+    14px calc(100% - 14px),
+    0 calc(100% - 14px)
+  );
+}
