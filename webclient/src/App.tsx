@@ -6,11 +6,44 @@ import type * as Monaco from "monaco-editor";
 import "./index.css";
 import introMusicUrl from './assets/audio/bg-intro-music.mp3';
 import ingameMusicUrl from './assets/audio/bg-ingame-music.mp3';
+import archerIdle from './assets/Archer/Idle.png';
+import swordsmanIdle from './assets/Swordsman/Idle.png';
+import wizardIdle from './assets/Wizard/Idle.png';
 
 const ROLE_OPTIONS = [
   { value: "Archer", icon: "🏹", label: "Archer (Delete)" },
   { value: "Swordsman", icon: "⚔️", label: "Swordsman (Insert, Update)" },
   { value: "Wizard", icon: "🧙", label: "Wizard (Query)" },
+] as const;
+
+const ROLE_PICKER_CARDS = [
+  {
+    value: "Archer",
+    title: "Archer",
+    spells: "Delete",
+    sprite: archerIdle,
+    glow: "shadow-[0_0_24px_rgba(239,68,68,0.5)]",
+    border: "border-[#ef4444]",
+    badge: "text-[#fca5a5] bg-[#3b1f1f]",
+  },
+  {
+    value: "Swordsman",
+    title: "Swordsman",
+    spells: "Insert, Update",
+    sprite: swordsmanIdle,
+    glow: "shadow-[0_0_24px_rgba(245,158,11,0.55)]",
+    border: "border-[#f59e0b]",
+    badge: "text-[#fcd34d] bg-[#3e240f]",
+  },
+  {
+    value: "Wizard",
+    title: "Wizard",
+    spells: "Query",
+    sprite: wizardIdle,
+    glow: "shadow-[0_0_24px_rgba(56,189,248,0.55)]",
+    border: "border-[#38bdf8]",
+    badge: "text-[#bae6fd] bg-[#1e3a5f]",
+  },
 ] as const;
 
 function CustomSelect({ value, options, onChange, label }: { value: string, options: {value: string, label: string}[], onChange: (val: string) => void, label: string }) {
@@ -170,6 +203,7 @@ export default function App() {
     () => "Player_" + Math.floor(Math.random() * 100)
   );
   const [playerClass, setPlayerClass] = useState("Archer");
+  const [showCharacterPicker, setShowCharacterPicker] = useState(false);
   const [gameMode, setGameMode] = useState("Standard");
 
   // ── Audio Playback Management ──────────────────────────────────────────
@@ -776,11 +810,6 @@ export default function App() {
     const selectedRoleTaken = !ws && joinNeedsRoleChange;
     const availableRoles = ROLE_OPTIONS.filter((r) => r.value !== playerClass);
 
-    const classOptions = ROLE_OPTIONS.map((r) => ({
-      value: r.value,
-      label: `${r.icon} ${r.label}`,
-    }));
-
     // Shared player setup block — class picker locked once connected
     const PlayerSetup = (
       <div className="bg-[#784f2b] border-[3px] border-[#523315] rounded-xl p-4 flex flex-col gap-3">
@@ -811,16 +840,27 @@ export default function App() {
                 </div>
               </div>
             ) : (
-              <CustomSelect
-                label="CHARACTER CLASS"
-                value={playerClass}
-                onChange={(val) => {
-                  setJoinNeedsRoleChange(false);
-                  setLobbyError('');
-                  setPlayerClass(val);
-                }}
-                options={classOptions}
-              />
+              <div>
+                <label className="block text-[10px] font-bold text-[#fde6b3] mb-1 tracking-wider">CHARACTER CLASS</label>
+                <button
+                  type="button"
+                  onClick={() => { playClick(); setShowCharacterPicker(true); }}
+                  className="w-full bg-[#2e1d0d] border-[3px] border-[#1e1208] rounded px-3 py-2 text-sm font-bold text-[#facc15] shadow-inner flex items-center gap-2 hover:border-[#d97706] transition-colors"
+                >
+                  <span>{playerClass === 'Wizard' ? '🧙' : playerClass === 'Archer' ? '🏹' : '⚔️'}</span>
+                  <span className="truncate">{playerClass}</span>
+                  <span className="ml-auto text-[9px] bg-[#3e240f] text-[#d97706] px-1.5 py-0.5 rounded font-black tracking-wider">
+                    {getRoleBadgeLabel(playerClass)}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { playClick(); setShowCharacterPicker(true); }}
+                  className="mt-2 w-full text-[10px] font-black tracking-widest bg-[#523315] hover:bg-[#6b4c2a] text-[#fde6b3] border border-[#2e1d0d] rounded py-1.5 transition-colors"
+                >
+                  CHOOSE CHARACTER
+                </button>
+              </div>
             )}
           </div>
           <CustomSelect
@@ -1142,6 +1182,71 @@ export default function App() {
             </div>
 
           </div>
+
+          {showCharacterPicker && !ws && (
+            <div className="fixed inset-0 z-[80] bg-[#1e1208] flex items-center justify-center">
+              <div className="w-full h-full max-w-[1920px] max-h-[1080px] flex flex-col items-center px-10 md:px-16 pt-10 md:pt-12 pb-10 md:pb-12">
+                <h2 className="text-center text-5xl md:text-7xl font-pixelify text-[#fde6b3] tracking-wider drop-shadow-[0_0_10px_rgba(253,230,179,0.4)]">
+                  SELECT CHARACTER
+                </h2>
+
+                <div className="mt-18 md:mt-20 flex items-end justify-center gap-8 md:gap-12">
+                  {ROLE_PICKER_CARDS.map((card) => {
+                    return (
+                      <div key={card.value} className="flex flex-col items-center">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            playClick();
+                            setPlayerClass(card.value);
+                            setJoinNeedsRoleChange(false);
+                            setLobbyError('');
+                          }}
+                          className="outline-none"
+                        >
+                          <div className="relative w-[210px] h-[210px] md:w-[240px] md:h-[240px] overflow-hidden flex items-start justify-start role-idle-breath-wrap">
+                            <img
+                              src={card.sprite}
+                              alt={card.title}
+                              className="h-[210px] md:h-[240px] w-auto max-w-none pixelated role-sprite-layer role-sprite-legs"
+                              draggable={false}
+                            />
+                            <img
+                              src={card.sprite}
+                              alt=""
+                              aria-hidden="true"
+                              className="h-[210px] md:h-[240px] w-auto max-w-none pixelated role-sprite-layer role-sprite-torso"
+                              draggable={false}
+                            />
+                            <img
+                              src={card.sprite}
+                              alt=""
+                              aria-hidden="true"
+                              className="h-[210px] md:h-[240px] w-auto max-w-none pixelated role-sprite-layer role-sprite-head"
+                              draggable={false}
+                            />
+                          </div>
+                        </button>
+                        <p className="mt-0 text-4xl md:text-5xl font-pixelify tracking-wide text-[#d9c8bf] leading-none">
+                          {card.title}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="mt-auto mb-2 text-center">
+                  <button
+                    type="button"
+                    onClick={() => { playConfirm(); setShowCharacterPicker(false); }}
+                    className="font-pixelify text-5xl md:text-7xl tracking-wider text-[#efe1d4] hover:text-[#ffffff] transition-colors drop-shadow-[0_0_10px_rgba(255,255,255,0.35)]"
+                  >
+                    PLAY &gt;&gt;&gt;
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     );
