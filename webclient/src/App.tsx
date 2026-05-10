@@ -209,14 +209,6 @@ export default function App() {
   const [showCharacterPicker, setShowCharacterPicker] = useState(false);
   const [gameMode, setGameMode] = useState("Standard");
 
-  const pickAvailableJoinRole = () => {
-    const taken = new Set<string>(Array.isArray(joinInfo?.taken_roles) ? joinInfo.taken_roles : []);
-    if (!taken.has(playerClass)) return playerClass;
-
-    const fallback = ROLE_OPTIONS.find((r) => !taken.has(r.value))?.value;
-    return fallback ?? playerClass;
-  };
-
   useEffect(() => {
     if (!showCharacterPicker) return;
 
@@ -388,12 +380,32 @@ export default function App() {
         case "lobby_closed":
           // Server rejected connection — show a clean UI error, not a browser alert
           setShouldConnect(false);
-          setLobbyIsOpen(false);
-          setHostInfo(null);
-          setJoinInfo(null);
           setJoinNeedsRoleChange(Boolean(msg.change_role_required));
           setLobbyError(msg.message || 'Lobby is closed. The host must open it first.');
+
+          // If this is a role-conflict error while in CREATE mode,
+          // keep host lobby state and refresh it, instead of resetting to "server not found".
+          if (msg.type === 'lobby_error' && msg.change_role_required && lobbyMode === 'create') {
+            pingLocalServer();
+          } else {
+            setLobbyIsOpen(false);
+            setHostInfo(null);
+            setJoinInfo(null);
+          }
+
           setView('LOBBY');
+          break;
+        case "role_changed":
+          if (msg.role) {
+            setPlayerClass(String(msg.role));
+            setJoinNeedsRoleChange(false);
+            setLobbyError('');
+            setMessages((m) => [...m, `✅ Role changed to ${msg.role}`]);
+          }
+          break;
+        case "role_error":
+          setJoinNeedsRoleChange(Boolean(msg.change_role_required));
+          setLobbyError(msg.message || 'Unable to change role right now.');
           break;
         case "player_died":
           if (msg.player_id === myIdRef.current) {
@@ -432,7 +444,7 @@ export default function App() {
 
     socket.onclose = () => setWs(null);
     return () => { socket.close(); };
-  }, [playerName, playerClass, shouldConnect, gameMode, serverHost]);
+  }, [playerName, shouldConnect, gameMode, serverHost]);
 
   // Transition to GAME view when game starts
   useEffect(() => {
@@ -450,8 +462,9 @@ export default function App() {
       setHostInfo(data);
       setLobbyIsOpen(data.open === true);
     } catch {
-      setHostInfo(null);
-      setLobbyIsOpen(false);
+      // Keep the last known host state to avoid false "server not found"
+      // flashes on brief local ping timing failures.
+      setLobbyIsOpen((prev) => prev);
     } finally {
       setIsHostPinging(false);
     }
@@ -1075,16 +1088,7 @@ export default function App() {
                         className="flex-1 bg-[#5c3e21] hover:bg-[#3e240f] text-[#d4b483] border-b-[4px] border-[#3e240f] active:border-b-0 active:translate-y-[4px] font-pixelify tracking-wider px-6 py-4 rounded-xl text-xl transition-all">
                         ← BACK
                       </button>
-                      <button onClick={() => {
-                        playConfirm();
-                        const nextRole = pickAvailableJoinRole();
-                        if (nextRole !== playerClass) {
-                          setPlayerClass(nextRole);
-                          setJoinNeedsRoleChange(false);
-                          setLobbyError('');
-                        }
-                        setShouldConnect(true);
-                      }} disabled={!joinInfo || !joinInfo.open}
+                      <button onClick={() => { playConfirm(); setShouldConnect(true); }} disabled={!joinInfo || !joinInfo.open}
                         className="flex-grow-[2] bg-[#d97706] hover:bg-[#b45309] active:bg-[#92400e] disabled:bg-[#5c3e21] disabled:text-[#6b4c2a] disabled:border-[#3e240f] disabled:cursor-not-allowed text-[#fde6b3] border-b-[4px] border-[#92400e] active:border-b-0 active:translate-y-[4px] font-pixelify tracking-widest px-8 py-4 rounded-xl text-xl transition-all shadow-[0_0_20px_rgba(217,119,6,0.4)]">
                         {!joinInfo ? 'PING FIRST...' : !joinInfo.open ? '🔒 LOBBY CLOSED' : 'JOIN SERVER ➔'}
                       </button>
@@ -1205,9 +1209,13 @@ export default function App() {
                           onClick={() => {
                             if (isTaken) return;
                             playClick();
-                            setPlayerClass(card.value);
-                            setJoinNeedsRoleChange(false);
-                            setLobbyError('');
+                            if (ws) {
+                              ws.send(JSON.stringify({ type: "change_role", role: card.value }));
+                            } else {
+                              setPlayerClass(card.value);
+                              setJoinNeedsRoleChange(false);
+                              setLobbyError('');
+                            }
                           }}
                           className="outline-none"
                           disabled={isTaken}
@@ -1260,7 +1268,14 @@ export default function App() {
                 <div className="mt-auto pt-6 min-h-[88px] flex items-center justify-center text-center w-full">
                   <button
                     type="button"
-                    onClick={() => { playConfirm(); setShowCharacterPicker(false); }}
+                    onClick={() => {
+                      playConfirm();
+                      setShowCharacterPicker(false);
+                      if (lobbyMode === 'create') {
+                        setLobbyError('');
+                        pingLocalServer();
+                      }
+                    }}
                     className="font-pixelify text-3xl md:text-5xl tracking-wider text-[#efe1d4] hover:text-[#ffffff] transition-colors drop-shadow-[0_0_10px_rgba(255,255,255,0.35)]"
                   >
                     BACK TO LOBBY
