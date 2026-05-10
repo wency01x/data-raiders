@@ -132,19 +132,16 @@ export default function App() {
 
   // ── SFX / Soundboard ──────────────────────────────────────────────────
   const [sfxVolume, setSfxVolume] = useState(80); // 0-100, matches UI default
-  const { playClick, playConfirm, playBack, setVolume } = useSoundboard(sfxVolume);
-
-  // ── Background Music Volume ────────────────────────────────────────────
-  const [bgVolume, setBgVolume] = useState(50); // 0-100, default 50%
+  const { playClick, playConfirm, playBack } = useSoundboard(sfxVolume);
 
   useEffect(() => {
     introAudioRef.current = new Audio(introMusicUrl);
     introAudioRef.current.loop = true;
-    introAudioRef.current.volume = 0.5; // matches bgVolume default of 50
+    introAudioRef.current.volume = 0.5; // Set reasonable volume
 
     ingameAudioRef.current = new Audio(ingameMusicUrl);
     ingameAudioRef.current.loop = true;
-    ingameAudioRef.current.volume = 0.5; // matches bgVolume default of 50
+    ingameAudioRef.current.volume = 0.4;
 
     return () => {
       introAudioRef.current?.pause();
@@ -240,13 +237,6 @@ export default function App() {
   useEffect(() => {
     syncMusic();
   }, [view, showDeathScreen, showGameOver]);
-
-  // ── Sync bgVolume → audio element volumes ─────────────────────────────
-  useEffect(() => {
-    const v = bgVolume / 100;
-    if (introAudioRef.current) introAudioRef.current.volume = v;
-    if (ingameAudioRef.current) ingameAudioRef.current.volume = v;
-  }, [bgVolume]);
 
   useEffect(() => {
     // Attempt to start music on any click if it was blocked by browser autoplay policy
@@ -763,25 +753,7 @@ export default function App() {
                     min="0"
                     max="100"
                     value={sfxVolume}
-                    onChange={(e) => {
-                      const val = Number(e.target.value);
-                      setVolume(val);   // update ref immediately so playClick hears the new volume
-                      setSfxVolume(val);
-                      playClick();      // preview the SFX at the new volume
-                    }}
-                    className="w-full accent-[#d97706] cursor-pointer"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-[#fde6b3] mb-1 tracking-wider">BG MUSIC VOLUME</label>
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    value={bgVolume}
-                    onChange={(e) => {
-                      setBgVolume(Number(e.target.value));
-                    }}
+                    onChange={(e) => setSfxVolume(Number(e.target.value))}
                     className="w-full accent-[#d97706] cursor-pointer"
                   />
                 </div>
