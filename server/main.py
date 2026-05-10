@@ -492,6 +492,40 @@ async def websocket_endpoint(ws: WebSocket):
                     "text": msg.get("text", ""),
                 }, exclude=player.id)
 
+            elif msg_type == "change_role":
+                requested_role = str(msg.get("role", "")).strip()
+                if requested_role not in VALID_ROLES:
+                    await bus.send_to(player.id, {
+                        "type": "role_error",
+                        "message": "Invalid role selected.",
+                        "change_role_required": True,
+                    })
+                    continue
+
+                async with state.lock:
+                    taken_roles = {
+                        _extract_role(p.name)
+                        for pid, p in state.players.items()
+                        if pid != player.id and _extract_role(p.name)
+                    }
+
+                    if requested_role in taken_roles:
+                        await bus.send_to(player.id, {
+                            "type": "role_error",
+                            "message": "That role is already taken. Pick another character.",
+                            "change_role_required": True,
+                        })
+                        continue
+
+                    base_name = player.name.split("|")[0]
+                    player.name = f"{base_name}|{requested_role}"
+                    player.roles = {requested_role}
+
+                await bus.send_to(player.id, {
+                    "type": "role_changed",
+                    "role": requested_role,
+                })
+
     except (WebSocketDisconnect, Exception):
         pass
     finally:
