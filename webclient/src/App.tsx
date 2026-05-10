@@ -209,8 +209,12 @@ export default function App() {
   const [playerName, setPlayerName] = useState(
     () => "Player_" + Math.floor(Math.random() * 100)
   );
-  const [playerClass, setPlayerClass] = useState("Archer");
+  const [playerClass, setPlayerClass] = useState("");
   const [showCharacterPicker, setShowCharacterPicker] = useState(false);
+  const [pickerStatus, setPickerStatus] = useState<{ text: string; kind: 'info' | 'error' | 'success' }>({
+    text: '',
+    kind: 'info',
+  });
   const [gameMode, setGameMode] = useState("Standard");
 
   useEffect(() => {
@@ -219,7 +223,7 @@ export default function App() {
     const takenRoles = new Set<string>();
     if (ws && gameState?.players) {
       for (const p of gameState.players) {
-        const role = p?.name?.split('|')?.[1];
+        const role = p?.name?.split('|')?.[1] || (Array.isArray(p?.roles) ? p.roles[0] : "");
         if (!role) continue;
         if (p.id !== myId) takenRoles.add(role);
       }
@@ -227,10 +231,35 @@ export default function App() {
       for (const role of joinInfo.taken_roles) takenRoles.add(role);
     }
 
+    setPickerStatus((prev) => (
+      prev.text
+        ? prev
+        : { text: 'USE \u2190 / \u2192 TO CHOOSE, THEN PRESS ENTER TO CONFIRM', kind: 'info' }
+    ));
+
     const selectableRoles = ROLE_PICKER_CARDS.filter((c) => !takenRoles.has(c.value));
     if (selectableRoles.length === 0) return;
 
     const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const selectedRole = playerClass || selectableRoles[0]?.value;
+        if (!selectedRole) return;
+        if (takenRoles.has(selectedRole)) {
+          setPickerStatus({ text: `${selectedRole} is already picked.`, kind: 'error' });
+          return;
+        }
+        if (ws) {
+          ws.send(JSON.stringify({ type: "change_role", role: selectedRole }));
+          setPickerStatus({ text: `Choosing ${selectedRole}...`, kind: 'info' });
+        } else {
+          setPlayerClass(selectedRole);
+          setJoinNeedsRoleChange(false);
+          setLobbyError('');
+          setPickerStatus({ text: `Chosen: ${selectedRole}`, kind: 'success' });
+        }
+        return;
+      }
       if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
       e.preventDefault();
 
@@ -241,6 +270,7 @@ export default function App() {
       setPlayerClass(selectableRoles[nextIdx].value);
       setJoinNeedsRoleChange(false);
       setLobbyError('');
+      setPickerStatus({ text: `Press ENTER to choose ${selectableRoles[nextIdx].title}.`, kind: 'info' });
     };
 
     window.addEventListener('keydown', onKeyDown);
@@ -333,7 +363,8 @@ export default function App() {
     socket.onopen = () => {
       setWs(socket);
       setJoinNeedsRoleChange(false);
-      socket.send(JSON.stringify({ type: "join", player_name: `${playerName}|${playerClass}` }));
+      // Join lobby first without a role; role is chosen only in joined lobby picker.
+      socket.send(JSON.stringify({ type: "join", player_name: `${playerName}` }));
       if (gameMode === 'Speedrun') setSpeedrunStart(Date.now());
     };
 
@@ -406,12 +437,14 @@ export default function App() {
             setPlayerClass(String(msg.role));
             setJoinNeedsRoleChange(false);
             setLobbyError('');
+            setPickerStatus({ text: `Chosen: ${msg.role}`, kind: 'success' });
             setMessages((m) => [...m, `✅ Role changed to ${msg.role}`]);
           }
           break;
         case "role_error":
           setJoinNeedsRoleChange(Boolean(msg.change_role_required));
           setLobbyError(msg.message || 'Unable to change role right now.');
+          setPickerStatus({ text: msg.message || 'Role is already picked.', kind: 'error' });
           break;
         case "player_died":
           if (msg.player_id === myIdRef.current) {
@@ -880,7 +913,52 @@ export default function App() {
       return `${Math.floor(s / 60)}m ${s % 60}s`;
     };
 
+    const normalizeRole = (role: unknown) => String(role || '').trim().toLowerCase();
+    const extractPlayerRole = (p: any) =>
+      String(p?.name?.split('|')?.[1] || (Array.isArray(p?.roles) ? p.roles[0] : '') || '').trim();
+    const takenRoles = new Set<string>();
+
+    // Primary source: authoritative server snapshot list.
+    if (Array.isArray(gameState?.taken_roles)) {
+      for (const role of gameState.taken_roles) {
+        takenRoles.add(normalizeRole(role));
+      }
+      const myLivePlayer = Array.isArray(gameState?.players)
+        ? gameState.players.find((p: any) => p?.id === myId)
+        : null;
+      if (myLivePlayer) {
+        if (Array.isArray(myLivePlayer.roles)) {
+          for (const ownRole of myLivePlayer.roles) {
+            takenRoles.delete(normalizeRole(ownRole));
+          }
+        } else {
+          const ownRole = extractPlayerRole(myLivePlayer);
+          if (ownRole) takenRoles.delete(normalizeRole(ownRole));
+        }
+      }
+    } else if (Array.isArray(gameState?.players)) {
+      // Fallback for older server payloads.
+      for (const p of gameState.players) {
+        if (p?.id === myId) continue;
+        if (Array.isArray(p?.roles)) {
+          for (const role of p.roles) {
+            if (role) takenRoles.add(normalizeRole(role));
+          }
+        }
+        const nameRole = extractPlayerRole(p);
+        if (nameRole) takenRoles.add(normalizeRole(nameRole));
+      }
+    } else if (lobbyMode === 'join' && Array.isArray(joinInfo?.taken_roles)) {
+      for (const role of joinInfo.taken_roles) {
+        takenRoles.add(normalizeRole(role));
+      }
+    }
+
     const selectedRoleTaken = !ws && joinNeedsRoleChange;
+    const playerHasRole = (p: any, role: string) => {
+      if (!p) return false;
+      return normalizeRole(extractPlayerRole(p)) === normalizeRole(role);
+    };
     // Shared player setup block — class picker locked once connected
     const PlayerSetup = (
       <div className="bg-[#784f2b] border-[3px] border-[#523315] rounded-xl p-4 flex flex-col gap-3">
@@ -1137,7 +1215,7 @@ export default function App() {
                   {/* Role coordination panel */}
                   <div className="flex flex-col gap-1.5">
                     {gameState?.players?.map((p: any) => {
-                      const pClass = p.name.split('|')[1] || 'Player';
+                      const pClass = p.name.split('|')[1] || (Array.isArray(p.roles) ? p.roles[0] : '') || 'Player';
                       const isMe = p.id === myId;
                       const isDead = p.lives !== undefined && p.lives <= 0;
                       const badgeLabel = getRoleBadgeLabel(pClass);
@@ -1173,7 +1251,7 @@ export default function App() {
                     <p className="text-[#d4b483] font-black tracking-widest">ROLE SLOTS</p>
                     <div className="flex gap-3 flex-wrap">
                       {ROLE_OPTIONS.map((r) => {
-                        const filled = gameState?.players?.some((p: any) => p.name.endsWith(`|${r.value}`));
+                        const filled = gameState?.players?.some((p: any) => playerHasRole(p, r.value));
                         return (
                           <span key={r.value} className={filled ? 'text-[#4ade80] font-bold' : 'text-[#5c3e21]'}>
                             {r.icon} {r.value}: {filled ? 'FILLED' : 'EMPTY'}
@@ -1185,7 +1263,11 @@ export default function App() {
 
                   <button
                     type="button"
-                    onClick={() => { playClick(); setShowCharacterPicker(true); }}
+                    onClick={() => {
+                      playClick();
+                      setPickerStatus({ text: 'USE \u2190 / \u2192 TO CHOOSE, THEN PRESS ENTER TO CONFIRM', kind: 'info' });
+                      setShowCharacterPicker(true);
+                    }}
                     className="w-full min-h-[64px] bg-[#523315] hover:bg-[#6b4c2a] active:bg-[#3e240f] text-[#fde6b3] border-b-[4px] border-[#2e1d0d] active:border-b-0 active:translate-y-[4px] rounded-xl font-pixelify tracking-widest text-2xl transition-all"
                   >
                     SELECT CHARACTER
@@ -1209,28 +1291,34 @@ export default function App() {
                 <h2 className="text-center text-5xl md:text-7xl font-pixelify text-[#fde6b3] tracking-wider drop-shadow-[0_0_10px_rgba(253,230,179,0.4)]">
                   SELECT CHARACTER
                 </h2>
+                <p className={`mt-3 min-h-[20px] text-center text-xs md:text-sm font-pixelify tracking-wider ${
+                  pickerStatus.kind === 'error'
+                    ? 'text-[#ef4444]'
+                    : pickerStatus.kind === 'success'
+                      ? 'text-[#22c55e]'
+                      : 'text-[#86efac]'
+                }`}>
+                  {pickerStatus.text || 'USE \u2190 / \u2192 TO CHOOSE, THEN PRESS ENTER TO CONFIRM'}
+                </p>
 
-                <div className="mt-16 md:mt-18 w-full flex items-end justify-center gap-8 md:gap-12 min-h-[320px]">
+                <div className="mt-10 md:mt-12 w-full flex items-end justify-center gap-8 md:gap-12 min-h-[320px]">
                   {ROLE_PICKER_CARDS.map((card) => {
                     const isSelected = playerClass === card.value;
-                    const isTaken = (
-                      (ws && gameState?.players?.some((p: any) => p.id !== myId && p.name?.endsWith(`|${card.value}`)))
-                      || (!ws && lobbyMode === 'join' && Array.isArray(joinInfo?.taken_roles) && joinInfo.taken_roles.includes(card.value))
-                    );
+                    const isTaken = takenRoles.has(normalizeRole(card.value));
                     return (
                       <div key={card.value} className="flex flex-col items-center">
                         <button
                           type="button"
                           onClick={() => {
-                            if (isTaken) return;
-                            playClick();
-                            if (ws) {
-                              ws.send(JSON.stringify({ type: "change_role", role: card.value }));
-                            } else {
-                              setPlayerClass(card.value);
-                              setJoinNeedsRoleChange(false);
-                              setLobbyError('');
+                            if (isTaken) {
+                              setPickerStatus({ text: `${card.title} is already picked.`, kind: 'error' });
+                              return;
                             }
+                            playClick();
+                            setPlayerClass(card.value);
+                            setJoinNeedsRoleChange(false);
+                            setLobbyError('');
+                            setPickerStatus({ text: `Press ENTER to choose ${card.title}.`, kind: 'info' });
                           }}
                           className="outline-none"
                           disabled={isTaken}
@@ -1268,7 +1356,7 @@ export default function App() {
                         </p>
                         <div className="min-h-[14px] mt-0.5 flex items-center justify-center">
                           <p className={`text-[10px] font-pixelify tracking-wider ${isTaken ? 'text-[#ef4444]' : 'text-transparent select-none'}`}>
-                            TAKEN
+                            ALREADY PICKED
                           </p>
                         </div>
                       </div>
@@ -1277,7 +1365,7 @@ export default function App() {
                 </div>
 
                 <p className="mt-3 text-[#86efac] text-sm md:text-base font-pixelify tracking-wider">
-                  USE ← / → TO CHOOSE
+                  USE ← / → TO CHOOSE • PRESS ENTER TO CONFIRM
                 </p>
 
                 <div className="mt-auto pt-6 min-h-[88px] flex items-center justify-center text-center w-full">
@@ -1285,6 +1373,7 @@ export default function App() {
                     type="button"
                     onClick={() => {
                       playConfirm();
+                      setPickerStatus({ text: '', kind: 'info' });
                       setShowCharacterPicker(false);
                       if (lobbyMode === 'create') {
                         setLobbyError('');
