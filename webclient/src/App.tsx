@@ -138,7 +138,8 @@ export default function App() {
 
   // ── SFX / Soundboard ──────────────────────────────────────────────────
   const [sfxVolume, setSfxVolume] = useState(80); // 0-100, matches UI default
-  const { playClick, playConfirm, playBack, setVolume } = useSoundboard(sfxVolume);
+  const effectiveSfxVolume = Math.round(sfxVolume * (masterVolume / 100));
+  const { playClick, playConfirm, playBack, setVolume } = useSoundboard(effectiveSfxVolume);
 
   // ── Background Music Volume ────────────────────────────────────────────
   const [bgVolume, setBgVolume] = useState(50); // 0-100, default 50%
@@ -288,11 +289,7 @@ export default function App() {
     if (ingameAudioRef.current) ingameAudioRef.current.volume = v;
   }, [bgVolume, masterVolume]);
 
-  // Sync masterVolume changes into SFX volume ref
-  useEffect(() => {
-    const effective = Math.round(sfxVolume * (masterVolume / 100));
-    setVolume(effective);
-  }, [masterVolume]);
+
 
   useEffect(() => {
     // Attempt to start music on any click if it was blocked by browser autoplay policy
@@ -841,7 +838,7 @@ export default function App() {
                     value={sfxVolume}
                     onChange={(e) => {
                       const val = Number(e.target.value);
-                      setVolume(val);   // update ref immediately so playClick hears the new volume
+                      setVolume(Math.round(val * (masterVolume / 100)));   // update ref immediately so playClick hears the new volume
                       setSfxVolume(val);
                       playClick();      // preview the SFX at the new volume
                     }}
