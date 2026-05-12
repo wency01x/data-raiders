@@ -133,9 +133,13 @@ export default function App() {
   const introAudioRef = useRef<HTMLAudioElement | null>(null);
   const ingameAudioRef = useRef<HTMLAudioElement | null>(null);
 
+  // ── Master Volume ─────────────────────────────────────────────────────
+  const [masterVolume, setMasterVolume] = useState(100); // 0-100, default 100%
+
   // ── SFX / Soundboard ──────────────────────────────────────────────────
   const [sfxVolume, setSfxVolume] = useState(80); // 0-100, matches UI default
-  const { playClick, playConfirm, playBack, setVolume } = useSoundboard(sfxVolume);
+  const effectiveSfxVolume = Math.round(sfxVolume * (masterVolume / 100));
+  const { playClick, playConfirm, playBack, setVolume } = useSoundboard(effectiveSfxVolume);
 
   // ── Background Music Volume ────────────────────────────────────────────
   const [bgVolume, setBgVolume] = useState(50); // 0-100, default 50%
@@ -310,10 +314,12 @@ export default function App() {
 
   // ── Sync bgVolume → audio element volumes ─────────────────────────────
   useEffect(() => {
-    const v = bgVolume / 100;
+    const v = (bgVolume / 100) * (masterVolume / 100);
     if (introAudioRef.current) introAudioRef.current.volume = v;
     if (ingameAudioRef.current) ingameAudioRef.current.volume = v;
-  }, [bgVolume]);
+  }, [bgVolume, masterVolume]);
+
+
 
   useEffect(() => {
     // Attempt to start music on any click if it was blocked by browser autoplay policy
@@ -845,7 +851,16 @@ export default function App() {
 
                 <div>
                   <label className="block text-xs font-bold text-[#fde6b3] mb-1 tracking-wider">MASTER VOLUME</label>
-                  <input type="range" min="0" max="100" defaultValue="50" className="w-full accent-[#d97706] cursor-pointer" />
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={masterVolume}
+                    onChange={(e) => {
+                      setMasterVolume(Number(e.target.value));
+                    }}
+                    className="w-full accent-[#d97706] cursor-pointer"
+                  />
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-[#fde6b3] mb-1 tracking-wider">SFX VOLUME</label>
@@ -856,7 +871,7 @@ export default function App() {
                     value={sfxVolume}
                     onChange={(e) => {
                       const val = Number(e.target.value);
-                      setVolume(val);   // update ref immediately so playClick hears the new volume
+                      setVolume(Math.round(val * (masterVolume / 100)));   // update ref immediately so playClick hears the new volume
                       setSfxVolume(val);
                       playClick();      // preview the SFX at the new volume
                     }}
