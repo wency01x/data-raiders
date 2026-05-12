@@ -364,7 +364,7 @@ export default function App() {
       setWs(socket);
       setJoinNeedsRoleChange(false);
       // Join lobby first without a role; role is chosen only in joined lobby picker.
-      socket.send(JSON.stringify({ type: "join", player_name: `${playerName}` }));
+      socket.send(JSON.stringify({ type: "join", player_name: `${playerName}`, game_mode: gameMode }));
       if (gameMode === 'Speedrun') setSpeedrunStart(Date.now());
     };
 
@@ -982,8 +982,9 @@ export default function App() {
             value={gameMode}
             onChange={setGameMode}
             options={[
-              { value: "Standard", label: "⚔️ Multiplayer Dungeon" },
-              { value: "Speedrun", label: "⏱ Speedrun Mode" }
+              { value: "Solo", label: "Solo Dungeon" },
+              { value: "Standard", label: "Multiplayer Dungeon" },
+              { value: "Speedrun", label: "Speedrun Mode" }
             ]}
           />
         </div>
@@ -1265,13 +1266,19 @@ export default function App() {
                   <button
                     type="button"
                     onClick={() => {
+                      if (gameMode === "Solo") return;
                       playClick();
                       setPickerStatus({ text: 'USE \u2190 / \u2192 TO CHOOSE, THEN PRESS ENTER TO CONFIRM', kind: 'info' });
                       setShowCharacterPicker(true);
                     }}
-                    className="w-full min-h-[64px] bg-[#523315] hover:bg-[#6b4c2a] active:bg-[#3e240f] text-[#fde6b3] border-b-[4px] border-[#2e1d0d] active:border-b-0 active:translate-y-[4px] rounded-xl font-pixelify tracking-widest text-2xl transition-all"
+                    disabled={gameMode === "Solo"}
+                    className={`w-full min-h-[64px] text-[#fde6b3] rounded-xl font-pixelify tracking-widest text-2xl transition-all ${
+                      gameMode === "Solo"
+                        ? 'bg-[#2e1d0d] border-b-[4px] border-[#1e1208] text-[#a8825b] cursor-not-allowed'
+                        : 'bg-[#523315] hover:bg-[#6b4c2a] active:bg-[#3e240f] border-b-[4px] border-[#2e1d0d] active:border-b-0 active:translate-y-[4px]'
+                    }`}
                   >
-                    SELECT CHARACTER
+                    {gameMode === "Solo" ? "SOLO MODE: ALL SPELLS ENABLED" : "SELECT CHARACTER"}
                   </button>
 
                   {lobbyMode === 'create' && (
