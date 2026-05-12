@@ -152,13 +152,12 @@ class GameState:
             if self.game_phase == "LOBBY":
                 return None
 
-            # Transfer departed roles to all remaining players so anyone left can continue.
-            recipients = []
-            for p in self.players.values():
-                p.roles.update(departed.roles)
-                recipients.append(p.name)
+            # Transfer departed roles to exactly one remaining player.
+            # Use insertion order for deterministic successor selection.
+            successor = next(iter(self.players.values()))
+            successor.roles.update(departed.roles)
             return {
-                "to_player_names": recipients,
+                "to_player_names": [successor.name],
                 "roles": sorted(departed.roles),
             }
 
