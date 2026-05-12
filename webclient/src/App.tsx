@@ -13,7 +13,7 @@ import wizardIdle from './assets/Wizard/Idle.png';
 const ROLE_OPTIONS = [
   { value: "Archer", icon: "🏹", label: "Archer (Delete)" },
   { value: "Swordsman", icon: "⚔️", label: "Swordsman (Insert, Update)" },
-  { value: "Wizard", icon: "🧙", label: "Wizard (Query)" },
+  { value: "Wizard", icon: "🧙", label: "Wizard (Select, Query)" },
 ] as const;
 
 const ROLE_PICKER_CARDS = [
@@ -40,7 +40,7 @@ const ROLE_PICKER_CARDS = [
   {
     value: "Wizard",
     title: "Wizard",
-    spells: "Query",
+    spells: "Select, Query",
     sprite: wizardIdle,
     glow: "shadow-[0_0_24px_rgba(56,189,248,0.55)]",
     border: "border-[#38bdf8]",
@@ -118,6 +118,26 @@ function configureSqlTheme(monaco: typeof Monaco) {
   });
 }
 
+function copyTextWithFallback(text: string): boolean {
+  try {
+    if (!text) return false;
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.top = '-9999px';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    const ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
 export default function App() {
   type ViewState = 'ENTER' | 'TITLE' | 'LOBBY' | 'LOADING' | 'GAME';
   const [view, setView] = useState<ViewState>('ENTER');
@@ -183,6 +203,7 @@ export default function App() {
 
   // JOIN SERVER — whatever IP the user types
   const [joinIp, setJoinIp]           = useState('');
+  const [ipCopied, setIpCopied]       = useState(false);
   const [joinInfo, setJoinInfo]       = useState<any>(null);
   const [isJoinPinging, setIsJoinPinging] = useState(false);
   const [joinError, setJoinError]     = useState('');
@@ -652,6 +673,8 @@ export default function App() {
     && Boolean(gameState?.room_schema_merged)
     && !Boolean(gameState?.room_joined);
   const me = gameState?.players?.find((p: any) => p.id === myId);
+  const lobbyPlayerCount = Array.isArray(gameState?.players) ? gameState.players.length : 0;
+  const needsMorePlayersForMultiplayer = gameMode !== "Solo" && lobbyPlayerCount < 2;
   useEffect(() => {
     const liveMode = String(me?.game_mode || '').trim();
     if (liveMode && liveMode !== gameMode) {
@@ -1066,8 +1089,34 @@ export default function App() {
                       <>
                         <div className="text-center">
                           <p className="text-[10px] text-[#d4b483] mb-1 tracking-wider font-semibold">SHARE THIS IP WITH YOUR FRIENDS</p>
-                          <div className="font-mono text-[#ffdb7a] text-2xl font-black bg-[#1e1208] rounded-lg py-4 px-4 border-2 border-[#2e1d0d] shadow-inner tracking-widest select-all cursor-text">
-                            {hostInfo.server_ip}
+                          <div className="font-mono text-[#ffdb7a] text-2xl font-black bg-[#1e1208] rounded-lg py-3 px-3 border-2 border-[#2e1d0d] shadow-inner tracking-widest select-all cursor-text flex items-center justify-center gap-3">
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                let copied = false;
+                                try {
+                                  if (navigator.clipboard?.writeText) {
+                                    await navigator.clipboard.writeText(hostInfo.server_ip || '');
+                                    copied = true;
+                                  }
+                                } catch {
+                                  copied = false;
+                                }
+                                if (!copied) copied = copyTextWithFallback(hostInfo.server_ip || '');
+                                if (copied) {
+                                  setIpCopied(true);
+                                  window.setTimeout(() => setIpCopied(false), 1200);
+                                }
+                              }}
+                              className={`shrink-0 border-b-[3px] active:border-b-0 active:translate-y-[3px] rounded px-3 py-2 font-pixelify text-sm tracking-widest transition-all ${
+                                ipCopied
+                                  ? 'bg-[#bbf7d0] text-[#14532d] border-[#4ade80]'
+                                  : 'bg-[#f3f4f6] hover:bg-[#ffffff] active:bg-[#e5e7eb] text-[#1e1208] border-[#9ca3af]'
+                              }`}
+                            >
+                              {ipCopied ? 'COPIED' : 'COPY'}
+                            </button>
+                            <span className="text-center">{hostInfo.server_ip}</span>
                           </div>
                         </div>
                         <div className="grid grid-cols-3 gap-2 text-xs font-mono text-center">
@@ -1242,7 +1291,7 @@ export default function App() {
                       }}
                       className="text-[#d4b483] hover:text-[#fca5a5] text-[10px]"
                     >
-                      Go Back
+                      GO BACK
                     </button>
                   </h2>
 
@@ -1285,7 +1334,9 @@ export default function App() {
                     <p className="text-[#d4b483] font-black tracking-widest">ROLE SLOTS</p>
                     <div className="flex gap-3 flex-wrap">
                       {ROLE_OPTIONS.map((r) => {
-                        const filled = gameState?.players?.some((p: any) => playerHasRole(p, r.value));
+                        const filled = gameMode === "Solo"
+                          ? true
+                          : gameState?.players?.some((p: any) => playerHasRole(p, r.value));
                         return (
                           <span key={r.value} className={filled ? 'text-[#4ade80] font-bold' : 'text-[#5c3e21]'}>
                             {r.icon} {r.value}: {filled ? 'FILLED' : 'EMPTY'}
@@ -1314,10 +1365,27 @@ export default function App() {
                   </button>
 
                   {lobbyMode === 'create' && (
-                    <button onClick={() => { playConfirm(); ws?.send(JSON.stringify({ type: "start_game" })); }}
-                      className="w-full mt-1 bg-[#d97706] hover:bg-[#b45309] active:bg-[#92400e] text-[#fde6b3] border-b-[6px] border-[#92400e] active:border-b-0 active:translate-y-[6px] font-pixelify tracking-widest px-6 py-4 rounded-xl text-3xl transition-all shadow-[0_0_20px_rgba(217,119,6,0.4)]">
-                      START ADVENTURE!
-                    </button>
+                    <>
+                      <button
+                        onClick={() => {
+                          if (needsMorePlayersForMultiplayer) return;
+                          playConfirm();
+                          ws?.send(JSON.stringify({ type: "start_game" }));
+                        }}
+                        disabled={needsMorePlayersForMultiplayer}
+                        className={`w-full mt-1 text-[#fde6b3] font-pixelify tracking-widest px-6 py-4 rounded-xl text-3xl transition-all ${
+                          needsMorePlayersForMultiplayer
+                            ? 'bg-[#5b3b16] border-b-[6px] border-[#3f2a11] text-[#caa373] cursor-not-allowed'
+                            : 'bg-[#d97706] hover:bg-[#b45309] active:bg-[#92400e] border-b-[6px] border-[#92400e] active:border-b-0 active:translate-y-[6px] shadow-[0_0_20px_rgba(217,119,6,0.4)]'
+                        }`}>
+                        START ADVENTURE!
+                      </button>
+                      {needsMorePlayersForMultiplayer && (
+                        <p className="mt-2 text-center text-[11px] font-pixelify tracking-wide text-[#ef4444]">
+                          Waiting for 2 players.
+                        </p>
+                      )}
+                    </>
                   )}
                 </div>
               )}
@@ -1391,8 +1459,11 @@ export default function App() {
                             </div>
                           </div>
                         </button>
-                        <p className={`mt-0 text-4xl md:text-5xl font-pixelify tracking-wide leading-none transition-colors ${isTaken ? 'text-[#ef4444]' : isSelected ? 'text-[#22c55e]' : 'text-[#f3f4f6]'}`}>
+                        <p className={`mt-0 text-4xl md:text-5xl font-pixelify tracking-wide leading-none text-center transition-colors ${isTaken ? 'text-[#ef4444]' : isSelected ? 'text-[#22c55e]' : 'text-[#f3f4f6]'}`}>
                           {card.title}
+                        </p>
+                        <p className={`mt-1 text-xl md:text-2xl font-pixelify tracking-wide leading-none text-center transition-colors ${isTaken ? 'text-[#ef4444]' : isSelected ? 'text-[#22c55e]' : 'text-[#f3f4f6]'}`}>
+                          ({card.spells})
                         </p>
                         <div className="min-h-[14px] mt-0.5 flex items-center justify-center">
                           <p className={`text-[10px] font-pixelify tracking-wider ${isTaken ? 'text-[#ef4444]' : 'text-transparent select-none'}`}>
