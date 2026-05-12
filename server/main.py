@@ -265,7 +265,13 @@ async def websocket_endpoint(ws: WebSocket):
         if msg.get("type") != "join":
             return
         player_name = msg.get("player_name", "Anonymous")
-        game_mode = str(msg.get("game_mode", "Standard")).strip()
+        requested_mode = str(msg.get("game_mode", "Standard")).strip().lower()
+        if requested_mode == "solo":
+            game_mode = "Solo"
+        elif requested_mode == "speedrun":
+            game_mode = "Speedrun"
+        else:
+            game_mode = "Standard"
         chosen_role = _extract_role(player_name)
 
         if chosen_role and chosen_role not in VALID_ROLES:
@@ -281,6 +287,27 @@ async def websocket_endpoint(ws: WebSocket):
             taken_roles = {
                 r for r in (_extract_role(p.name) for p in state.players.values()) if r
             }
+            existing_modes = {str(getattr(p, "game_mode", "Standard")).strip().lower() for p in state.players.values()}
+            has_players = len(state.players) > 0
+
+        # Solo is a single-player session mode; prevent mode-mixing in the same lobby.
+        if game_mode.lower() == "solo" and has_players:
+            await ws.send_json({
+                "type": "lobby_error",
+                "message": "Solo mode requires an empty lobby. Create a new lobby for solo play.",
+                "change_role_required": False,
+            })
+            await ws.close()
+            return
+        if game_mode.lower() != "solo" and "solo" in existing_modes:
+            await ws.send_json({
+                "type": "lobby_error",
+                "message": "This lobby is running in Solo mode and cannot accept multiplayer joins.",
+                "change_role_required": False,
+            })
+            await ws.close()
+            return
+
         if chosen_role and chosen_role in taken_roles:
             await ws.send_json({
                 "type": "lobby_error",
