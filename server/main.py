@@ -522,6 +522,19 @@ async def websocket_endpoint(ws: WebSocket):
                 })
 
             elif msg_type == "start_game":
+                async with state.lock:
+                    player_count = len(state.players)
+                    lobby_modes = {
+                        str(getattr(p, "game_mode", "Standard")).strip().lower()
+                        for p in state.players.values()
+                    }
+                is_multiplayer_lobby = "solo" not in lobby_modes
+                if is_multiplayer_lobby and player_count < 2:
+                    await bus.send_to(player.id, {
+                        "type": "reset_ack",
+                        "message": "Need at least 2 players to start Multiplayer mode.",
+                    })
+                    continue
                 _game_started = True
                 state.game_phase = "JOURNEY_MAP"
                 await bus.enqueue({"type": "reset_ack", "message": "The adventure begins!"})
