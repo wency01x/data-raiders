@@ -114,6 +114,33 @@ def _safe_query(sql: str) -> bool:
     return first_word == "SELECT"
 
 
+_TABLE_REF_RE = re.compile(r"\b(?:from|join)\s+([A-Za-z_][A-Za-z0-9_]*)\b", re.IGNORECASE)
+
+
+def _extract_query_tables(sql: str) -> set[str]:
+    return {m.group(1).lower() for m in _TABLE_REF_RE.finditer(sql)}
+
+
+def _allowed_query_tables_for_current_room() -> set[str]:
+    allowed = {state.current_room.lower()}
+    try:
+        schema = json.loads(state.room_schema or "{}")
+        table_name = str(schema.get("table_name", "")).strip()
+        if table_name:
+            allowed.add(table_name.lower())
+    except Exception:
+        pass
+    return allowed
+
+
+def _query_is_scoped_to_current_room(sql: str) -> tuple[bool, set[str], set[str]]:
+    tables = _extract_query_tables(sql)
+    allowed = _allowed_query_tables_for_current_room()
+    if not tables:
+        return False, tables, allowed
+    return tables.issubset(allowed), tables, allowed
+
+
 # ── Stats endpoint — exposes live concurrency metrics ────────────────────────
 
 @app.get("/stats")
@@ -393,6 +420,23 @@ async def websocket_endpoint(ws: WebSocket):
                         "rows": [],
                     })
                 else:
+                    scoped_ok, used_tables, allowed_tables = _query_is_scoped_to_current_room(sql)
+                    if not scoped_ok:
+                        allowed_list = ", ".join(sorted(allowed_tables))
+                        used_list = ", ".join(sorted(used_tables)) if used_tables else "(none)"
+                        await bus.send_to(player.id, {
+                            "type": "query_result",
+                            "success": False,
+                            "message": (
+                                f"ROOM LOCK: Query table must match current room only. "
+                                f"Used: {used_list}. Allowed: {allowed_list}."
+                            ),
+                            "columns": [],
+                            "rows": [],
+                        })
+                        continue
+                
+                if _safe_query(sql):
                     conn = get_connection()
                     try:
                         cursor = conn.execute(sql)
