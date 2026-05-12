@@ -370,8 +370,6 @@ export default function GameCanvas({ ws, gameState, myId, attacks, castSpells, o
       const currentMe = gs?.players?.find((p: any) => p.id === currentMyId);
       const currentAllowedSpells = getAllowedSpellsForPlayer(currentMe);
       const currentVisibleSpells = SPELLS.filter(s => currentAllowedSpells.has(s));
-      const currentCanQueryRole = Boolean(currentMe?.can_query);
-      const currentClassLabel = currentMe?.name?.split('|')?.[1] || '';
       const revealedEnemyIds = new Set<number>(
         Array.isArray(gs?.revealed_enemy_ids) ? gs.revealed_enemy_ids : []
       );
@@ -761,8 +759,8 @@ export default function GameCanvas({ ws, gameState, myId, attacks, castSpells, o
         const sp = currentVisibleSpells[i];
         const active = sp === currentSpell;
         const col = SPELL_COLORS[sp];
-        const label = sp === "JOIN" ? `[E] JOIN (next lvl)` : `[${i + 1}] ${sp}`;
-        const btnW = sp === "JOIN" ? 110 : 86;
+        const label = `[${i + 1}] ${sp}`;
+        const btnW = 86;
         rrect(ctx, sx, hudY + 10, btnW, 30, 6);
         ctx.fillStyle = active ? col : "#523315";
         ctx.fill();
@@ -775,25 +773,6 @@ export default function GameCanvas({ ws, gameState, myId, attacks, castSpells, o
         ctx.fillText(label, sx + btnW / 2, hudY + 30);
         sx += btnW + 6;
       }
-
-      // Role badge in HUD
-      const roleBadgeX = sx + 6;
-      const roleLabel = currentCanQueryRole ? " QUERY" : " DELETE";
-      const roleColor = currentCanQueryRole ? "#38bdf8" : "#f87171";
-      const roleBg    = currentCanQueryRole ? "rgba(30,58,95,0.9)" : "rgba(59,31,31,0.9)";
-      ctx.fillStyle = roleBg;
-      rrect(ctx, roleBadgeX, hudY + 10, 88, 30, 6);
-      ctx.fill();
-      ctx.strokeStyle = roleColor;
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-      ctx.fillStyle = roleColor;
-      ctx.font = "bold 10px 'Segoe UI', sans-serif";
-      ctx.textAlign = "center";
-      ctx.fillText(roleLabel, roleBadgeX + 44, hudY + 28);
-      ctx.font = "bold 8px 'Segoe UI', sans-serif";
-      ctx.fillStyle = "rgba(255,255,255,0.5)";
-      ctx.fillText(currentClassLabel || "PLAYER", roleBadgeX + 44, hudY + 18);
 
       // Target info
       if (tid != null && gs) {
