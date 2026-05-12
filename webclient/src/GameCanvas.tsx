@@ -372,6 +372,9 @@ export default function GameCanvas({ ws, gameState, myId, attacks, castSpells, o
       const currentVisibleSpells = SPELLS.filter(s => currentAllowedSpells.has(s));
       const currentCanQueryRole = Boolean(currentMe?.can_query);
       const currentClassLabel = currentMe?.name?.split('|')?.[1] || '';
+      const revealedEnemyIds = new Set<number>(
+        Array.isArray(gs?.revealed_enemy_ids) ? gs.revealed_enemy_ids : []
+      );
       
       let tid = lockedTargetRef.current;
       if (tid != null) {
@@ -578,11 +581,13 @@ export default function GameCanvas({ ws, gameState, myId, attacks, castSpells, o
              ctx.fillText("BUFFED!", e.x + TILE / 2, e.y - 20 - textYOffset);
           }
 
-          // Name label above
-          ctx.fillStyle = "#e2e8f0";
-          ctx.font = "bold 11px 'Segoe UI', sans-serif";
-          ctx.textAlign = "center";
-          ctx.fillText((e.label || "?").substring(0, 10), e.x + TILE / 2, e.y - 12);
+          // Name label above (hidden until revealed by successful SELECT inspect)
+          if (revealedEnemyIds.has(e.id)) {
+            ctx.fillStyle = "#e2e8f0";
+            ctx.font = "bold 11px 'Segoe UI', sans-serif";
+            ctx.textAlign = "center";
+            ctx.fillText((e.label || "?").substring(0, 10), e.x + TILE / 2, e.y - 12);
+          }
 
           // HP bar
           const ex = e.x + 4, ey = e.y + 4, ew = TILE - 8;
@@ -795,12 +800,13 @@ export default function GameCanvas({ ws, gameState, myId, attacks, castSpells, o
         const tgt = gs.enemies?.find((e: any) => e.id === tid);
         if (tgt) {
           const blocked = tgt.depends_on?.length > 0;
+          const targetLabel = revealedEnemyIds.has(tgt.id) ? (tgt.label || "?") : "UNKNOWN";
           ctx.fillStyle = "#fde6b3"; // light yellow/cream font
           ctx.font = "bold 12px 'Segoe UI', sans-serif";
           ctx.textAlign = "right";
           const sub = getEnemySubtext(tgt);
           ctx.fillText(
-            `TARGET: [${tgt.label}] ${sub ? "(" + sub.substring(0, 15) + ")" : ""}  HP:${tgt.hp}/${tgt.max_hp}  ${blocked ? "🔒FK" : "✓"}`,
+            `TARGET: [${targetLabel}] ${sub ? "(" + sub.substring(0, 15) + ")" : ""}  HP:${tgt.hp}/${tgt.max_hp}  ${blocked ? "🔒FK" : "✓"}`,
             gw - 14 - 86 - 20, hudY + 30
           );
         }

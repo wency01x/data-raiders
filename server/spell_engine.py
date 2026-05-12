@@ -232,6 +232,8 @@ async def _spell_select(player_id: str, target_id: int | None) -> dict:
 
     # Room 5 boss: advance phase on SELECT
     if state.room_number == 5:
+        should_advance_phase = False
+        current_room = state.current_room
         async with state.lock:
             enemy = state.enemies.get(target_id)
             if enemy and enemy.extra.get("phase") == 1:
@@ -239,18 +241,24 @@ async def _spell_select(player_id: str, target_id: int | None) -> dict:
                 valid, reason = checker(enemy.extra, "SELECT")
                 if valid:
                     enemy.extra["phase"] = 2
+                    should_advance_phase = True
 
-                    def _advance_phase():
-                        conn = get_connection()
-                        try:
-                            conn.execute(f"UPDATE {state.current_room} SET phase=2 WHERE id=?", (target_id,))
-                            conn.commit()
-                        finally:
-                            conn.close()
+        if should_advance_phase:
+            def _advance_phase():
+                conn = get_connection()
+                try:
+                    conn.execute(f"UPDATE {current_room} SET phase=2 WHERE id=?", (target_id,))
+                    conn.commit()
+                finally:
+                    conn.close()
 
-                    await _run_in_thread(_advance_phase)
-                    return {"success": True, "message": f"SELECT reveals: {info}\n⚡ Weakness found: REINDEX! Use UPDATE next!", "affected_id": target_id}
+            # Important: DB write runs outside state.lock to avoid blocking
+            # the game tick/movement loops while waiting on thread-pool I/O.
+            await _run_in_thread(_advance_phase)
+            await state.reveal_enemy(target_id)
+            return {"success": True, "message": f"SELECT reveals: {info}\n⚡ Weakness found: REINDEX! Use UPDATE next!", "affected_id": target_id}
 
+    await state.reveal_enemy(target_id)
     await state.add_score(player_id, 5)
     return {"success": True, "message": f"SELECT → {info}", "affected_id": target_id}
 

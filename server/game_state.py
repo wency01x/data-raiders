@@ -102,6 +102,7 @@ class GameState:
         self.players: dict[str, Player] = {}
         self.enemies: dict[int, Enemy]  = {}
         self.loot:    dict[int, Loot]   = {}
+        self.revealed_enemy_ids: set[int] = set()
         self.current_room: str = "enemies_room1"
         self.room_brief:   str = ""
         self.room_objective: str = ""
@@ -169,6 +170,7 @@ class GameState:
     def load_enemies(self, rows, extra_cols=None):
         """Load enemies from DB rows. extra_cols lists column names beyond the standard ones."""
         self.enemies.clear()
+        self.revealed_enemy_ids.clear()
         self.room_joined = False
         self.room_schema_merged = False
         standard = {"id", "label", "hp", "max_hp", "tile_x", "tile_y", "alive", "depends_on"}
@@ -247,6 +249,11 @@ class GameState:
             if p:
                 p.score += amount
 
+    async def reveal_enemy(self, enemy_id: int):
+        async with self.lock:
+            if enemy_id in self.enemies:
+                self.revealed_enemy_ids.add(enemy_id)
+
     def snapshot(self) -> dict:
         taken_roles = sorted({
             role
@@ -259,6 +266,7 @@ class GameState:
             "players":    [p.to_dict() for p in self.players.values()],
             "enemies":    [e.to_dict() for e in self.enemies.values() if e.alive],
             "loot":       [l.to_dict() for l in self.loot.values()],
+            "revealed_enemy_ids": sorted(self.revealed_enemy_ids),
             "taken_roles": taken_roles,
             "room":       self.current_room,
             "room_number": self.room_number,

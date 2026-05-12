@@ -334,6 +334,13 @@ async def websocket_endpoint(ws: WebSocket):
                         "spell": spell,
                         **result,
                     })
+                    if spell.upper() == "SELECT" and result.get("success"):
+                        await bus.enqueue({
+                            "type": "spell_result",
+                            "player_id": player.id,
+                            "spell": spell,
+                            **result,
+                        }, exclude=player.id)
                 except Exception as e:
                     import traceback
                     traceback.print_exc()
