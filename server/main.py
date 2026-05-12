@@ -213,6 +213,11 @@ async def get_lobby():
 async def open_lobby():
     """Host calls this to open the lobby so other players can join."""
     global _game_started, _lobby_open
+    if _game_started or state.game_phase != "LOBBY" or bus.player_count > 0:
+        return JSONResponse(
+            {"open": False, "status": "game_started", "error": "The game has already started."},
+            status_code=409,
+        )
     if _lobby_open:
         return JSONResponse({"open": True, "status": "already_open", "error": "Lobby is already open by another player."}, status_code=400)
     
@@ -250,6 +255,13 @@ async def websocket_endpoint(ws: WebSocket):
 
     # Gate: reject if game started
     if _game_started:
+        await ws.send_json({
+            "type": "lobby_closed",
+            "message": "The game has already started.",
+        })
+        await ws.close()
+        return
+    if state.game_phase != "LOBBY":
         await ws.send_json({
             "type": "lobby_closed",
             "message": "The game has already started.",
