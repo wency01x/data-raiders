@@ -23,6 +23,7 @@ class Player:
     color_idx: int = 0
     score: int = 0
     roles: set[str] = field(default_factory=set)
+    game_mode: str = "Standard"
 
     def to_dict(self):
         granted = set()
@@ -37,6 +38,7 @@ class Player:
             "roles": sorted(self.roles),
             "granted_spells": [s for s in SPELL_ORDER if s in granted],
             "can_query": "Wizard" in self.roles,
+            "game_mode": self.game_mode,
         }
 
 
@@ -126,16 +128,19 @@ class GameState:
         self._color_counter += 1
         return idx
 
-    async def add_player(self, name: str) -> Player:
+    async def add_player(self, name: str, game_mode: str = "Standard") -> Player:
         async with self.lock:
             pid   = str(uuid.uuid4())[:8]
             color = self.next_color_idx()
             spawn_x = (len(self.players) + 1) * 2 * TILE_SIZE
             role = self._extract_role(name)
+            mode = str(game_mode or "Standard").strip()
+            is_solo = mode.lower() == "solo"
             p = Player(id=pid, name=name,
                        x=float(spawn_x), y=float(2 * TILE_SIZE),
                        color_idx=color,
-                       roles={role} if role else set())
+                       roles={"Archer", "Swordsman", "Wizard"} if is_solo else ({role} if role else set()),
+                       game_mode="Solo" if is_solo else mode)
             self.players[pid] = p
             return p
 
