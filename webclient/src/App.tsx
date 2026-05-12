@@ -693,6 +693,7 @@ export default function App() {
 
   useEffect(() => {
     setQueryResult(null);
+    setSqlInput("");
   }, [roomNum]);
 
   useEffect(() => {
