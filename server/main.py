@@ -265,6 +265,7 @@ async def websocket_endpoint(ws: WebSocket):
         if msg.get("type") != "join":
             return
         player_name = msg.get("player_name", "Anonymous")
+        game_mode = str(msg.get("game_mode", "Standard")).strip()
         chosen_role = _extract_role(player_name)
 
         if chosen_role and chosen_role not in VALID_ROLES:
@@ -292,7 +293,7 @@ async def websocket_endpoint(ws: WebSocket):
     except (WebSocketDisconnect, Exception):
         return
 
-    player = await state.add_player(player_name)
+    player = await state.add_player(player_name, game_mode=game_mode)
     await bus.connect(player.id, ws)
     print(f"[Server] {player.name} joined (id={player.id}) | Players online: {bus.player_count}")
 
@@ -544,6 +545,13 @@ async def websocket_endpoint(ws: WebSocket):
                 }, exclude=player.id)
 
             elif msg_type == "change_role":
+                if getattr(player, "game_mode", "").lower() == "solo":
+                    await bus.send_to(player.id, {
+                        "type": "role_error",
+                        "message": "Solo mode uses all roles. Character switching is disabled.",
+                        "change_role_required": False,
+                    })
+                    continue
                 requested_role = str(msg.get("role", "")).strip()
                 if requested_role not in VALID_ROLES:
                     await bus.send_to(player.id, {
