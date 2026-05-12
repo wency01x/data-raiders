@@ -344,7 +344,12 @@ export default function App() {
   }, [showDeathScreen]);
 
   const chatEndRef = useRef<HTMLDivElement>(null);
-  useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
+  const chatScrollRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = chatScrollRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+  }, [messages]);
 
   useEffect(() => {
     if (!shouldConnect) return;
@@ -647,6 +652,12 @@ export default function App() {
     && Boolean(gameState?.room_schema_merged)
     && !Boolean(gameState?.room_joined);
   const me = gameState?.players?.find((p: any) => p.id === myId);
+  useEffect(() => {
+    const liveMode = String(me?.game_mode || '').trim();
+    if (liveMode && liveMode !== gameMode) {
+      setGameMode(liveMode);
+    }
+  }, [me, gameMode]);
   const canQuery = Boolean(me?.can_query ?? (playerClass === 'Wizard'));
   const sqlPreview = sqlInput.trim()
     ? sqlInput.trim().split('\n')[0]
@@ -1022,7 +1033,7 @@ export default function App() {
                   : 'text-[#6b4c2a] hover:text-[#d4b483]'
               }`}
             >
-              🏰 CREATE LOBBY
+              CREATE LOBBY
             </button>
             <button
               onClick={() => { playClick(); setLobbyMode('join'); setLobbyError(''); setJoinInfo(null); setJoinError(''); }}
@@ -1032,7 +1043,7 @@ export default function App() {
                   : 'text-[#6b4c2a] hover:text-[#d4b483]'
               }`}
             >
-              🔗 JOIN SERVER
+              JOIN SERVER
             </button>
           </div>
 
@@ -1211,7 +1222,28 @@ export default function App() {
                   )}
                   <h2 className="text-[#4ade80] text-xs font-black tracking-widest border-b-2 border-[#523315] pb-2 flex items-center justify-between">
                     <span>CONNECTED RAIDERS ({onlineCount})</span>
-                    <button onClick={() => { playBack(); setWs(null); setShouldConnect(false); window.location.reload(); }} className="text-[#d4b483] hover:text-[#fca5a5] text-[10px]">Disconnect</button>
+                    <button
+                      onClick={() => {
+                        playBack();
+                        if (ws) ws.close();
+                        setWs(null);
+                        setShouldConnect(false);
+                        setGameState(null);
+                        setMyId(null);
+                        setMessages([]);
+                        setOnlineCount(1);
+                        setLobbyMode('create');
+                        setLobbyError('');
+                        setJoinError('');
+                        setJoinInfo(null);
+                        setJoinIp('');
+                        setView('LOBBY');
+                        pingLocalServer();
+                      }}
+                      className="text-[#d4b483] hover:text-[#fca5a5] text-[10px]"
+                    >
+                      Go Back
+                    </button>
                   </h2>
 
                   {/* Role coordination panel */}
@@ -1826,22 +1858,16 @@ export default function App() {
               Clear
             </button>
           </div>
-          <div className="flex-1 overflow-y-auto flex flex-col gap-1 text-xs">
+          <div ref={chatScrollRef} className="flex-1 overflow-y-auto flex flex-col gap-2 text-xs">
             {messages.length === 0 && (
               <p className="text-[#fde6b3]/50 text-[10px] text-center mt-6">No messages yet...</p>
             )}
             {messages.map((m, i) => (
-              <div key={i} className={`px-2.5 py-1.5 rounded-lg max-w-full break-words text-[11px] font-bold ${
-                  m.startsWith("✅") ? "bg-[#4ade80]/20 text-[#4ade80] border border-[#4ade80]/30" :
-                  m.startsWith("❌") ? "bg-[#ef4444]/20 text-[#fca5a5] border border-[#ef4444]/30" :
-                  m.startsWith("🔍") ? "bg-[#38bdf8]/20 text-[#bae6fd] border border-[#38bdf8]/30 font-mono" :
-                  m.startsWith("📊") ? "bg-[#c084fc]/20 text-[#e9d5ff] border border-[#c084fc]/30" :
-                  (m.startsWith("⚡") || m.startsWith("👋")) ? "bg-[#facc15]/20 text-[#fde047] border border-[#facc15]/30" :
-                  m.startsWith("⚔") ? "bg-[#f87171]/20 text-[#fca5a5] border border-[#f87171]/30" :
-                  m.startsWith("⟳") ? "bg-[#fb923c]/20 text-[#fdba74] border border-[#fb923c]/30" :
-                  "bg-[#523315] text-[#fde6b3] shadow-inner"
-                }`}>
-                {m.replace(/^[✅❌🔍📊⚡👋⚔⟳]\s*/u, "")}
+              <div key={i} className={`w-full flex ${m.startsWith("You:") ? "justify-end" : "justify-start"}`}>
+                <div className="relative max-w-[94%] break-words px-3 py-2.5 mb-2 bg-[#e2e2e2] text-[#151515] border-[4px] border-[#111111] rounded-[3px] font-pixelify text-[10px] leading-4 tracking-wide text-left shadow-[0_4px_0_rgba(17,17,17,0.25)]">
+                  {m.replace(/^[✅❌🔍📊⚡👋⚔⟳🧙]\s*/u, "")}
+                  <span className="pointer-events-none absolute left-5 -bottom-[13px] h-[13px] w-[20px] bg-[#e2e2e2] border-b-[4px] border-l-[4px] border-[#111111]"></span>
+                </div>
               </div>
             ))}
             <div ref={chatEndRef} />
