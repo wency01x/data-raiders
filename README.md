@@ -1,116 +1,234 @@
 # Data Raiders
 
-Data Raiders is an interactive Dungeon Crawler where players navigate challenges using a robust dependency-based SQL deletion mechanic with HP penalties to overcome obstacles and enemies. The game features a real-time multiplayer backend, a classic Pygame client, and a modern, high-fidelity React web interface.
+Data Raiders is a real-time multiplayer dungeon crawler where players use SQL-themed role abilities to clear rooms.
 
-> **Note:** This is a Parallel Distributed Computing project FINAL PIT for its course.
+- Backend: FastAPI + WebSockets + SQLite
+- Frontend: React + Vite + TypeScript + Canvas UI
+- Core concept: team coordination through role-locked spells (`DELETE`, `INSERT/UPDATE`, `SELECT/JOIN`)
 
----
+## Table of Contents
 
-## Project Structure
+1. Overview
+2. Tech Stack
+3. Project Structure
+4. Prerequisites
+5. Installation
+6. Running the Project
+7. How Multiplayer Session Flow Works
+8. Roles and Abilities
+9. Lobby and Rejoin Rules
+10. API and Socket Protocol
+11. Configuration Notes
+12. Troubleshooting
+13. Development Notes
 
-| Directory | Description |
-|---|---|
-| `server/` | The backend server, built with FastAPI and WebSockets. Handles the authoritative game state (`game_state.py`), SQLite database interactions (`db.py`, `dungeon.db`), spell mechanics (`spell_engine.py`), and real-time events (`event_bus.py`). |
-| `client/` | A classic Pygame-based desktop client for playing the game locally. |
-| `webclient/` | A modern web client built with React, Vite, and TailwindCSS. Features responsive canvas rendering, animated character sprites, and a sleek user interface. |
-| `shared/` | Shared constants (`constants.py`) and message definitions (`messages.py`) used for communication between the clients and the backend over WebSockets. |
+## 1. Overview
 
----
+The server is authoritative: clients send intent (move, cast spell, query), and the server validates and applies all game logic.
 
-## Requirements
+Gameplay progresses across rooms with SQL-based objectives. Players must coordinate by role:
 
-### Server & Pygame Client
+- `Archer`: target cleanup via `DELETE`
+- `Swordsman`: data repair via `INSERT`/`UPDATE`
+- `Wizard`: intel + progression via `SELECT`/`JOIN`
+
+## 2. Tech Stack
+
+### Backend
 
 - Python 3.8+
+- FastAPI
+- Uvicorn
+- WebSockets
+- SQLite
+- AsyncIO + event queue + lock-protected shared state
 
-Ensure your virtual environment is active, then install dependencies:
+### Frontend
+
+- Node.js 18+
+- React 19
+- TypeScript
+- Vite
+- Monaco Editor (SQL terminal)
+
+## 3. Project Structure
+
+```text
+.
+├── server/
+│   ├── main.py          # FastAPI app, REST + WebSocket endpoints
+│   ├── game_state.py    # Authoritative shared state + role transfer logic
+│   ├── spell_engine.py  # Spell validation and room-specific SQL mechanics
+│   ├── event_bus.py     # Async producer/consumer event broadcast queue
+│   ├── room_manager.py  # Room orchestration helpers
+│   └── db.py            # SQLite init/seed/load utilities
+├── shared/
+│   ├── constants.py     # Tick rate, map constants, gameplay constants
+│   └── messages.py      # Shared message schema/constants
+├── webclient/
+│   ├── src/             # React UI, game canvas, lobby, terminal
+│   └── package.json
+├── runserver.py         # Uvicorn launcher
+├── requirements.txt
+└── README.md
+```
+
+## 4. Prerequisites
+
+- Python 3.8 or newer
+- Node.js 18 or newer
+- npm
+
+## 5. Installation
+
+### Backend dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### Web Client
-
-- Node.js & npm (v18+)
+### Frontend dependencies
 
 ```bash
 cd webclient
 npm install
 ```
 
----
+## 6. Running the Project
 
-## Running the Application
+### Step 1: Start backend server
 
-### 1. Start the Backend Server
-
-From the root directory:
+From repo root:
 
 ```bash
 python runserver.py
 ```
 
-> The server will start on `ws://0.0.0.0:8000` via Uvicorn.
+Server runs on port `8000`.
 
-### 2. Start the Web Client
+### Step 2: Start frontend
 
-In a separate terminal, navigate to the `webclient/` directory and start the Vite development server:
+In another terminal:
 
 ```bash
 cd webclient
-npm run dev
+npm run dev -- --host
 ```
 
----
+- `--host` exposes Vite on LAN so other devices can connect.
+- On another computer, use the host machine's current LAN IP + Vite port.
 
-## Features
+## 7. How Multiplayer Session Flow Works
 
-- **SQL-Based Mechanics** — Dependency-based SQL deletion gameplay mechanics with HP penalties.
-- **Real-Time Multiplayer** — Built on fast, reliable WebSockets and FastAPI to support live, connected gameplay.
-- **Visual Fidelity** — Beautiful animated sprites and dynamic canvas elements in the React interface.
-- **Cross-Platform Play** — Enjoy the game from either the desktop Pygame client or the modern React web client.
+1. Host opens lobby.
+2. Players join lobby via WebSocket.
+3. Host starts game (`start_game`).
+4. State transitions from lobby to journey/play phases.
+5. Server broadcasts snapshots at fixed tick rate.
+6. When all players disconnect, lobby/game flags reset for a new session.
 
----
+## 8. Roles and Abilities
 
-## Multiplayer Game System Implementation Details
+Default role mapping:
 
-This project is aligned with the **Option A - Multiplayer Game System** rubric.
+- `Archer` -> `DELETE`
+- `Swordsman` -> `INSERT`, `UPDATE`
+- `Wizard` -> `SELECT`, `JOIN`
 
-### 1. Minimum System Requirements
+Notes:
 
-**At least 2–4 concurrent players**
-The server uses FastAPI's WebSocket endpoints (`@app.websocket("/ws")` in `server/main.py`) to manage multiple concurrent connections. The frontend lobby natively supports multiple players joining the same instance, assigning each a unique UUID and color.
+- Query terminal execution is restricted to the current `Wizard` role holder.
+- Spell availability is role-validated on the server.
+- In Solo mode, one player gets all core roles.
 
-**Real-time state synchronization (Position, Actions, Events)**
-The server runs a dedicated background task called `_game_tick_loop()`. This loop runs at a consistent `TICK_RATE` (e.g., 20 times a second) and broadcasts a complete snapshot of all player positions, HP, and enemy statuses to every connected client. Fast-paced actions like walking and taking damage are immediately synced.
+## 9. Lobby and Rejoin Rules
 
-**Server-authoritative Architecture**
-Clients never trust their own state. When a user presses "W" to move or casts a spell, the client merely sends an *intent* to the server (`{"type": "move", "dx": 0, "dy": -1}`). The server calculates the logic, checks bounds, and verifies database rules (in `spell_engine.py`), and then the server updates the master state.
+Current enforced behavior:
 
-**Concurrency or parallelism used in Request Handling, Updates, and Events**
-- *Requests:* Each player's WebSocket connection is an independent, concurrent `asyncio` coroutine.
-- *State updates:* The `_game_tick_loop()` runs concurrently alongside the player connections.
-- *Events:* Chat messages and spell effects use a producer-consumer event queue to decouple them from the main tick loop.
+- Cannot join if lobby is closed.
+- Cannot join once game has started.
+- Cannot reopen a lobby while an active game/session is in progress.
+- If a player disconnects during gameplay, their role is transferred to exactly one remaining player (not all).
+- If only one player remains, transferred roles accumulate on that last player.
 
----
+## 10. API and Socket Protocol
 
-### 2. Parallel/Distributed Concepts Demonstrated
+### REST endpoints
 
-**Multithreading or multiprocessing for game logic**
-- *Where it is:* `server/spell_engine.py` and the `_run_in_thread()` function.
-- *How it works:* Python's `asyncio` is single-threaded. Because SQLite database queries are synchronous, a complex `SELECT` or `UPDATE` would freeze the entire server, causing other players to lag. To solve this, the game offloads every database query to a background **ThreadPoolExecutor** using `loop.run_in_executor()`. This is a textbook demonstration of mixing asynchronous I/O with multithreading.
+- `GET /stats` -> live server metrics (`players_online`, queue stats, room info)
+- `GET /lobby` -> lobby state (`open`, `started`, player list, roles)
+- `POST /lobby/open` -> host opens lobby
+- `POST /lobby/close` -> host closes lobby
 
-**Network communication (sockets, async I/O, RPC)**
-- *Where it is:* The `WebSocket` connections in `App.tsx` and `server/main.py`.
-- *How it works:* The game uses bi-directional async WebSockets for low-latency game state streaming, and standard HTTP polling for the `/stats` live dashboard.
+### WebSocket
 
-**Shared state management or message passing**
-- *Where it is:* `server/game_state.py` and `server/event_bus.py`.
-- *How it works:* The `state` object is shared memory that all concurrent WebSocket connections read from and write to. For non-state events (like "Player X joined" or a Chat message), you use **Message Passing** via an `asyncio.Queue` where endpoints act as *producers* and a background task acts as a *consumer* that broadcasts the messages.
+- Endpoint: `WS /ws`
+- Initial client message must be `join`
 
-**Synchronization mechanisms (locks, queues, async loops)**
-- *Where it is:* Throughout the backend.
-- *How it works:*
-  - **Locks:** Because multiple players might attack the same enemy at the exact same millisecond, you use `async with state.lock:` (an `asyncio.Lock()`) to prevent race conditions that could cause negative HP or duplicated points.
-  - **Queues:** The `event_bus.py` uses an `asyncio.Queue` to safely buffer bursts of network events.
-  - **Async loops:** The infinite `while True:` loop in `_game_tick_loop()` acts as your distributed clock/tick generator.
+Common client message types:
+
+- `join`
+- `move`
+- `spell`
+- `query`
+- `chat`
+- `change_role`
+- `start_game`
+- `reset`
+
+Common server message types:
+
+- `welcome`
+- `player_joined` / `player_left`
+- `spell_result`
+- `query_result`
+- `role_changed` / `role_error`
+- `reset_ack`
+- periodic state snapshots
+
+## 11. Configuration Notes
+
+- Backend port is currently `8000`.
+- Frontend dev server defaults to `5173` unless occupied.
+- LAN IP is environment-dependent and changes per machine/network.
+- For production-style static serving, build webclient:
+
+```bash
+cd webclient
+npm run build
+```
+
+When `webclient/dist` exists, backend serves it under `/client`.
+
+## 12. Troubleshooting
+
+### "The game has already started"
+
+Expected when trying to join/reopen during an active session. Wait for a fresh lobby.
+
+### Teammates cannot connect over LAN
+
+- Ensure backend and frontend are running with reachable host/IP.
+- Verify firewall allows ports `8000` and `5173` (or current Vite port).
+- Confirm devices are on the same network/subnet.
+
+### Role conflict on join
+
+If chosen role is already taken, change role in lobby and retry.
+
+### SQL terminal blocked
+
+Only the current Wizard-role holder can run queries.
+
+### Install/build issues
+
+- Re-run `npm install` in `webclient/`
+- Check Node version (`node -v`)
+- Reinstall Python dependencies (`pip install -r requirements.txt`)
+
+## 13. Development Notes
+
+- Shared mutable state is guarded with `asyncio.Lock`.
+- Event fan-out uses async queue consumer (`event_bus.py`).
+- DB operations used in gameplay are validated in spell/query handlers.
+- Avoid bypassing server validation from client-side changes.
