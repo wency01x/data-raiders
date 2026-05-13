@@ -19,11 +19,55 @@ import bossWalk4 from './assets/sprite-boss/sprite-gengar-walk-4.png';
 import bossWalk5 from './assets/sprite-boss/sprite-gengar-walk-5.png';
 
 import bgTileSrc from './assets/background/1 Tiles/FieldsTile_38.png';
+import roadTileSrc from './assets/background/1 Tiles/FieldsTile_41.png';
 import stone1Src from './assets/background/2 Objects/4 Stone/1.png';
 import stone2Src from './assets/background/2 Objects/4 Stone/2.png';
 import stone3Src from './assets/background/2 Objects/4 Stone/3.png';
 import bush1Src  from './assets/background/2 Objects/9 Bush/1.png';
 import bush2Src  from './assets/background/2 Objects/9 Bush/2.png';
+import camp1Src from './assets/background/2 Objects/8 Camp/1.png';
+import camp2Src from './assets/background/2 Objects/8 Camp/2.png';
+import tree1Src from './assets/background/2 Objects/7 Decor/Tree1.png';
+import tree2Src from './assets/background/2 Objects/7 Decor/Tree2.png';
+import log1Src from './assets/background/2 Objects/7 Decor/Log1.png';
+import lamp1Src from './assets/background/2 Objects/7 Decor/Lamp1.png';
+import box1Src from './assets/background/2 Objects/7 Decor/Box1.png';
+import grass1Src from './assets/background/2 Objects/5 Grass/1.png';
+import grass2Src from './assets/background/2 Objects/5 Grass/2.png';
+import flower1Src from './assets/background/2 Objects/6 Flower/1.png';
+import flower2Src from './assets/background/2 Objects/6 Flower/2.png';
+import fence1Src from './assets/background/2 Objects/2 Fence/1.png';
+import fence2Src from './assets/background/2 Objects/2 Fence/2.png';
+import pointer1Src from './assets/background/2 Objects/3 Pointer/1.png';
+import pointer2Src from './assets/background/2 Objects/3 Pointer/2.png';
+
+export function PixelHeart({ filled = true }: { filled?: boolean }) {
+  const pixelSize = 2;
+  const heartData = [
+    [0,2,2,2,0,2,2,2,0],
+    [2,1,1,1,2,1,1,1,2],
+    [2,1,1,1,1,1,1,1,2],
+    [2,1,1,1,1,1,1,1,2],
+    [0,2,1,1,1,1,1,2,0],
+    [0,0,2,1,1,1,2,0,0],
+    [0,0,0,2,1,2,0,0,0],
+    [0,0,0,0,2,0,0,0,0]
+  ];
+  const w = heartData[0].length * pixelSize;
+  const h = heartData.length * pixelSize;
+  return (
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="inline-block shrink-0" style={{marginTop: '-2px'}}>
+      {heartData.map((row, r) => 
+        row.map((val, c) => {
+          if (val === 0) return null;
+          let color = val === 2 ? "#111827" : "#ef4444";
+          if (!filled && val === 1) color = "#1e1208";
+          return <rect key={`${r}-${c}`} x={c * pixelSize} y={r * pixelSize} width={pixelSize} height={pixelSize} fill={color} />;
+        })
+      )}
+    </svg>
+  );
+}
 
 const TILE = 56;
 const COLS = 20;
@@ -134,8 +178,16 @@ if (typeof window !== "undefined") {
 
   const envLoads: [string, string][] = [
     ['bg', bgTileSrc],
+    ['road', roadTileSrc],
     ['stone1', stone1Src], ['stone2', stone2Src], ['stone3', stone3Src],
-    ['bush1', bush1Src], ['bush2', bush2Src]
+    ['bush1', bush1Src], ['bush2', bush2Src],
+    ['camp1', camp1Src], ['camp2', camp2Src],
+    ['tree1', tree1Src], ['tree2', tree2Src],
+    ['log1', log1Src], ['lamp1', lamp1Src], ['box1', box1Src],
+    ['grass1', grass1Src], ['grass2', grass2Src],
+    ['flower1', flower1Src], ['flower2', flower2Src],
+    ['fence1', fence1Src], ['fence2', fence2Src],
+    ['pointer1', pointer1Src], ['pointer2', pointer2Src]
   ];
   envLoads.forEach(([key, src]) => {
     const img = new Image(); img.src = src;
@@ -381,29 +433,98 @@ export default function GameCanvas({ ws, gameState, myId, attacks, castSpells, o
       }
       if (tid == null) tid = nearestEnemy(gs, currentMyId);
 
-      // Tiled Background
+      // Tiled Background with Random Rotations
       const roomNum = gs?.room_number || 1;
+      
+      const seededRandomForTile = (seed: number) => {
+        let x = Math.sin(seed) * 10000;
+        return x - Math.floor(x);
+      };
+
       const bgImg = ENV_SPRITES['bg'];
-      if (bgImg && bgImg.complete && bgImg.naturalWidth) {
-        let pat = ctx.createPattern(bgImg, "repeat");
-        ctx.fillStyle = pat || "#1b3d1b";
-        ctx.fillRect(0, 0, W, H);
-      } else {
-        ctx.fillStyle = "#1b3d1b";
-        ctx.fillRect(0, 0, W, H);
+      const roadImg = ENV_SPRITES['road'];
+
+      ctx.fillStyle = "#1b3d1b";
+      ctx.fillRect(0, 0, W, H);
+
+      // Procedural Pokémon-style Route Generation
+      const roadTiles = new Set<string>();
+      let routeSeed = roomNum * 123;
+      
+      // Random walk for horizontal path
+      let currentR = Math.floor(ROWS / 2);
+      for (let c = 0; c < COLS; c++) {
+         roadTiles.add(`${c},${currentR}`);
+         roadTiles.add(`${c},${currentR + 1}`);
+         
+         // Randomly move up or down to create a zigzag
+         const step = seededRandomForTile(routeSeed++);
+         if (step > 0.6 && currentR < ROWS - 3) {
+             currentR++;
+             roadTiles.add(`${c},${currentR}`);
+             roadTiles.add(`${c},${currentR + 1}`);
+         } else if (step < 0.4 && currentR > 2) {
+             currentR--;
+             roadTiles.add(`${c},${currentR}`);
+             roadTiles.add(`${c},${currentR + 1}`);
+         }
       }
 
-      ctx.save();
+      // Random walk for vertical path
+      let currentC = Math.floor(COLS / 2);
+      for (let r = 0; r < ROWS; r++) {
+         roadTiles.add(`${currentC},${r}`);
+         roadTiles.add(`${currentC + 1},${r}`);
+         
+         // Randomly move left or right
+         const step = seededRandomForTile(routeSeed++);
+         if (step > 0.6 && currentC < COLS - 3) {
+             currentC++;
+             roadTiles.add(`${currentC},${r}`);
+             roadTiles.add(`${currentC + 1},${r}`);
+         } else if (step < 0.4 && currentC > 2) {
+             currentC--;
+             roadTiles.add(`${currentC},${r}`);
+             roadTiles.add(`${currentC + 1},${r}`);
+         }
+      }
 
-      // Fallback floor tiles if image not loaded
-      if (!bgImg || !bgImg.complete || !bgImg.naturalWidth) {
-        for (let c = 0; c < COLS; c++) {
-          for (let r = 0; r < ROWS; r++) {
+      // Scatter some random natural patches to make it look less linear
+      const numPatches = 15 + Math.floor(seededRandomForTile(routeSeed++) * 20);
+      for (let i = 0; i < numPatches; i++) {
+         const randC = Math.floor(seededRandomForTile(routeSeed++) * COLS);
+         const randR = Math.floor(seededRandomForTile(routeSeed++) * ROWS);
+         roadTiles.add(`${randC},${randR}`);
+         // Add adjacent tiles for clustering
+         if (seededRandomForTile(routeSeed++) > 0.5) roadTiles.add(`${randC + 1},${randR}`);
+         if (seededRandomForTile(routeSeed++) > 0.5) roadTiles.add(`${randC},${randR + 1}`);
+      }
+
+      for (let c = 0; c < COLS; c++) {
+        for (let r = 0; r < ROWS; r++) {
+          const isRoadTile = roadTiles.has(`${c},${r}`);
+          const isRoad = roadImg && roadImg.complete && roadImg.naturalWidth && isRoadTile;
+          const isBg = bgImg && bgImg.complete && bgImg.naturalWidth;
+          
+          let tileToDraw = isRoad ? roadImg : (isBg ? bgImg : null);
+          
+          if (tileToDraw) {
+            const rotSeed = roomNum * 1000 + c * 100 + r;
+            const rotations = Math.floor(seededRandomForTile(rotSeed) * 4);
+            
+            ctx.save();
+            ctx.translate(c * TILE + TILE / 2, r * TILE + TILE / 2);
+            ctx.rotate(rotations * Math.PI / 2);
+            ctx.drawImage(tileToDraw, -TILE / 2, -TILE / 2, TILE, TILE);
+            ctx.restore();
+          } else if (!isRoad && !isBg) {
             ctx.fillStyle = (c + r) % 2 === 0 ? "#1e293b" : "#1a2332";
             ctx.fillRect(c * TILE, r * TILE, TILE, TILE);
           }
         }
       }
+
+      ctx.save();
 
       // Procedural Decorations
       const seededRandom = (seed: number) => {
@@ -411,12 +532,21 @@ export default function GameCanvas({ ws, gameState, myId, attacks, castSpells, o
         return x - Math.floor(x);
       };
 
-      const decos = ['stone1', 'stone2', 'stone3', 'bush1', 'bush2'];
+      const decos = [
+        'stone1', 'stone2', 'stone3', 'bush1', 'bush2',
+        'camp1', 'camp2', 'tree1', 'tree2', 'log1', 'lamp1', 'box1',
+        'grass1', 'grass2', 'flower1', 'flower2', 'fence1', 'fence2',
+        'pointer1', 'pointer2'
+      ];
       let seed = roomNum * 1337;
       
       // Draw ~15-20 decorations per room based on room number
       const numDecos = 10 + Math.floor(seededRandom(seed++) * 10);
-      for (let i = 0; i < numDecos; i++) {
+      const placedDecos: {x: number, y: number, w: number, h: number}[] = [];
+      
+      for (let i = 0; i < numDecos * 5; i++) {
+        if (placedDecos.length >= numDecos) break;
+        
         const decoType = decos[Math.floor(seededRandom(seed++) * decos.length)];
         const img = ENV_SPRITES[decoType];
         
@@ -424,12 +554,33 @@ export default function GameCanvas({ ws, gameState, myId, attacks, castSpells, o
         const dx = seededRandom(seed++) * (COLS * TILE);
         const dy = seededRandom(seed++) * (ROWS * TILE);
         // Vary the scale slightly
-        const scale = 0.8 + seededRandom(seed++) * 0.4;
+        let scale = 0.8 + seededRandom(seed++) * 0.4;
+        if (decoType.startsWith('flower') || decoType.startsWith('grass')) {
+            scale *= 0.35; // make flowers and grass much smaller
+        }
         
         if (img && img.complete && img.naturalWidth) {
           const w = TILE * scale;
           const h = (img.naturalHeight / img.naturalWidth) * w;
-          ctx.drawImage(img, dx - w/2, dy - h/2, w, h);
+          
+          const padding = 8;
+          const left = dx - w/2 - padding;
+          const right = dx + w/2 + padding;
+          const top = dy - h/2 - padding;
+          const bottom = dy + h/2 + padding;
+
+          let overlap = false;
+          for (const p of placedDecos) {
+             if (left < p.x + p.w && right > p.x && top < p.y + p.h && bottom > p.y) {
+                 overlap = true;
+                 break;
+             }
+          }
+
+          if (!overlap) {
+              placedDecos.push({x: left, y: top, w: right - left, h: bottom - top});
+              ctx.drawImage(img, dx - w/2, dy - h/2, w, h);
+          }
         }
       }
 
@@ -478,10 +629,34 @@ export default function GameCanvas({ ws, gameState, myId, attacks, castSpells, o
             ctx.save();
             ctx.translate(cx, cy + pulseY);
             ctx.scale(pulseScale, pulseScale);
-            ctx.font = "28px Arial";
-            ctx.textAlign = "center";
-            ctx.textBaseline = "middle";
-            ctx.fillText("❤️", 0, 0);
+            
+            const pixelSize = 3;
+            const heartData = [
+              [0,2,2,2,0,2,2,2,0],
+              [2,1,1,1,2,1,1,1,2],
+              [2,1,1,1,1,1,1,1,2],
+              [2,1,1,1,1,1,1,1,2],
+              [0,2,1,1,1,1,1,2,0],
+              [0,0,2,1,1,1,2,0,0],
+              [0,0,0,2,1,2,0,0,0],
+              [0,0,0,0,2,0,0,0,0]
+            ];
+            
+            const hW = heartData[0].length * pixelSize;
+            const hH = heartData.length * pixelSize;
+            for (let r = 0; r < heartData.length; r++) {
+              for (let c = 0; c < heartData[r].length; c++) {
+                const val = heartData[r][c];
+                if (val === 1) {
+                  ctx.fillStyle = "#ef4444"; // red
+                  ctx.fillRect(c * pixelSize - hW/2, r * pixelSize - hH/2, pixelSize, pixelSize);
+                } else if (val === 2) {
+                  ctx.fillStyle = "#111827"; // black/dark outline
+                  ctx.fillRect(c * pixelSize - hW/2, r * pixelSize - hH/2, pixelSize, pixelSize);
+                }
+              }
+            }
+            
             ctx.restore();
           } else {
             ctx.beginPath(); ctx.arc(cx, cy, 16, 0, Math.PI * 2);
@@ -905,9 +1080,9 @@ export default function GameCanvas({ ws, gameState, myId, attacks, castSpells, o
                   <span className="text-xl">💀</span>
                 ) : (
                   Array.from({ length: 3 }).map((_, i) => (
-                    <span key={i} className={`text-xl ${i < livesCount ? "animate-pulse" : ""}`}>
-                      {i < livesCount ? "❤️" : "🖤"}
-                    </span>
+                    <div key={i} className={`flex items-center justify-center ${i < livesCount ? "animate-pulse" : "opacity-60"}`}>
+                      <PixelHeart filled={i < livesCount} />
+                    </div>
                   ))
                 )}
               </div>

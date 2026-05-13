@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import { useSoundboard } from "./useSoundboard";
-import GameCanvas from "./GameCanvas";
+import GameCanvas, { PixelHeart } from "./GameCanvas";
 import Editor from "@monaco-editor/react";
 import type * as Monaco from "monaco-editor";
 import "./index.css";
@@ -278,6 +278,7 @@ export default function App() {
           setJoinNeedsRoleChange(false);
           setLobbyError('');
           setPickerStatus({ text: `Chosen: ${selectedRole}`, kind: 'success' });
+          setShowCharacterPicker(false);
         }
         return;
       }
@@ -465,6 +466,7 @@ export default function App() {
             setLobbyError('');
             setPickerStatus({ text: `Chosen: ${msg.role}`, kind: 'success' });
             setMessages((m) => [...m, `✅ Role changed to ${msg.role}`]);
+            setShowCharacterPicker(false);
           }
           break;
         case "role_error":
@@ -2126,9 +2128,11 @@ export default function App() {
             <p className="text-[#fca5a5] font-pixelify text-2xl md:text-3xl tracking-widest animate-pulse">
               YOU LOST ALL YOUR HEARTS
             </p>
-            <div className="flex gap-3 mt-1">
+            <div className="flex gap-3 mt-1 scale-150 origin-center">
               {[1,2,3].map(i => (
-                <span key={i} className="text-4xl grayscale opacity-30">❤️</span>
+                <div key={i} className="grayscale opacity-30">
+                  <PixelHeart filled={true} />
+                </div>
               ))}
             </div>
             <p className="text-[#d4b483] font-semibold text-sm tracking-wider">
