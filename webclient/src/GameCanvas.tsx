@@ -779,32 +779,34 @@ export default function GameCanvas({ ws, gameState, myId, attacks, castSpells, o
             ctx.fillText("🔒FK", e.x + TILE / 2, e.y + TILE + 10);
           }
 
-          // Bouncing red arrow above targeted enemy
+          // Bouncing pixel art red arrow above targeted enemy
           if (e.id === tid) {
             const bounce = Math.sin(Date.now() / 250) * 5;
-            const ax = e.x + TILE / 2;
-            const ay = e.y - 14 + bounce;
-            const aw = 12;  // arrowhead half-width
-            const ah = 10;  // arrowhead height
-            const as_ = 6;  // stem half-width
-            const stemH = 8; // stem height
-            ctx.beginPath();
-            ctx.moveTo(ax, ay + ah);           // tip (pointing down)
-            ctx.lineTo(ax - aw, ay);           // left wing
-            ctx.lineTo(ax - as_, ay);          // inner left
-            ctx.lineTo(ax - as_, ay - stemH);  // stem top left
-            ctx.lineTo(ax + as_, ay - stemH);  // stem top right
-            ctx.lineTo(ax + as_, ay);          // inner right
-            ctx.lineTo(ax + aw, ay);           // right wing
-            ctx.closePath();
-            ctx.fillStyle = "#ef4444";
-            ctx.shadowColor = "#ef4444";
-            ctx.shadowBlur = 10;
-            ctx.fill();
-            ctx.lineWidth = 1.5;
-            ctx.strokeStyle = "#92400e";
-            ctx.stroke();
-            ctx.shadowBlur = 0;
+            const ps = 4; // pixel size
+            // Pixel grid for downward arrow (1=red, 2=dark outline, 0=empty)
+            const arrowPixels = [
+              [0,0,2,2,2,2,2,0,0],
+              [0,0,2,1,1,1,2,0,0],
+              [0,0,2,1,1,1,2,0,0],
+              [0,0,2,1,1,1,2,0,0],
+              [2,2,2,1,1,1,2,2,2],
+              [0,2,1,1,1,1,1,2,0],
+              [0,0,2,1,1,1,2,0,0],
+              [0,0,0,2,1,2,0,0,0],
+              [0,0,0,0,2,0,0,0,0],
+            ];
+            const gw = arrowPixels[0].length * ps;
+            const gh = arrowPixels.length * ps;
+            const startX = Math.floor(e.x + TILE / 2 - gw / 2);
+            const startY = Math.floor(e.y - gh - 4 + bounce);
+            for (let r = 0; r < arrowPixels.length; r++) {
+              for (let c = 0; c < arrowPixels[r].length; c++) {
+                const val = arrowPixels[r][c];
+                if (val === 0) continue;
+                ctx.fillStyle = val === 1 ? "#ef4444" : "#1a0000";
+                ctx.fillRect(startX + c * ps, startY + r * ps, ps, ps);
+              }
+            }
           }
         }
 
