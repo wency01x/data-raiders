@@ -782,7 +782,7 @@ export default function GameCanvas({ ws, gameState, myId, attacks, castSpells, o
           // Bouncing pixel art red arrow above targeted enemy
           if (e.id === tid) {
             const bounce = Math.sin(Date.now() / 250) * 5;
-            const ps = 4; // pixel size
+            const ps = 3; // pixel size
             // Pixel grid for downward arrow (1=red, 2=dark outline, 0=empty)
             const arrowPixels = [
               [0,0,2,2,2,2,2,0,0],
