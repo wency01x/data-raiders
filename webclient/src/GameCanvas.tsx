@@ -779,17 +779,30 @@ export default function GameCanvas({ ws, gameState, myId, attacks, castSpells, o
             ctx.fillText("🔒FK", e.x + TILE / 2, e.y + TILE + 10);
           }
 
-          // Target highlight ring
+          // Bouncing red arrow above targeted enemy
           if (e.id === tid) {
-            const hx = e.x + 10;
-            const hy = e.y + 4;
-            const hw = TILE - 20;
-            const hh = TILE - 20;
-            rrect(ctx, hx, hy, hw, hh, 8);
-            ctx.lineWidth = 3; ctx.strokeStyle = "#3b82f6"; ctx.stroke();
-            const pulse = 0.3 + Math.sin(Date.now() / 200) * 0.2;
-            ctx.shadowColor = "#3b82f6";
-            ctx.shadowBlur = 15 * pulse;
+            const bounce = Math.sin(Date.now() / 250) * 5;
+            const ax = e.x + TILE / 2;
+            const ay = e.y - 14 + bounce;
+            const aw = 12;  // arrowhead half-width
+            const ah = 10;  // arrowhead height
+            const as_ = 6;  // stem half-width
+            const stemH = 8; // stem height
+            ctx.beginPath();
+            ctx.moveTo(ax, ay + ah);           // tip (pointing down)
+            ctx.lineTo(ax - aw, ay);           // left wing
+            ctx.lineTo(ax - as_, ay);          // inner left
+            ctx.lineTo(ax - as_, ay - stemH);  // stem top left
+            ctx.lineTo(ax + as_, ay - stemH);  // stem top right
+            ctx.lineTo(ax + as_, ay);          // inner right
+            ctx.lineTo(ax + aw, ay);           // right wing
+            ctx.closePath();
+            ctx.fillStyle = "#ef4444";
+            ctx.shadowColor = "#ef4444";
+            ctx.shadowBlur = 10;
+            ctx.fill();
+            ctx.lineWidth = 1.5;
+            ctx.strokeStyle = "#92400e";
             ctx.stroke();
             ctx.shadowBlur = 0;
           }
