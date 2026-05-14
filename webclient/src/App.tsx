@@ -200,6 +200,7 @@ export default function App() {
   const [lobbyIsOpen, setLobbyIsOpen]     = useState(false);
   const [amIHost, setAmIHost]             = useState(false);
   const [isOpening, setIsOpening]         = useState(false);
+  const [startAttempted, setStartAttempted] = useState(false);
 
   // JOIN SERVER — whatever IP the user types
   const [joinIp, setJoinIp]           = useState('');
@@ -684,6 +685,21 @@ export default function App() {
     }
   }, [me, gameMode]);
   const canQuery = Boolean(me?.can_query ?? (playerClass === 'Wizard'));
+  useEffect(() => {
+    if (gameMode === "Solo") {
+      setStartAttempted(false);
+      return;
+    }
+    if (!needsMorePlayersForMultiplayer && Array.isArray(gameState?.players)) {
+      const normalizeRole = (role: unknown) => String(role || '').trim().toLowerCase();
+      const extractPlayerRole = (p: any) =>
+        String(p?.name?.split('|')?.[1] || (Array.isArray(p?.roles) ? p.roles[0] : '') || '').trim();
+      const hasAllRoles = ROLE_OPTIONS
+        .map((r) => r.value)
+        .every((role) => gameState.players.some((p: any) => normalizeRole(extractPlayerRole(p)) === normalizeRole(role)));
+      if (hasAllRoles) setStartAttempted(false);
+    }
+  }, [gameMode, needsMorePlayersForMultiplayer, gameState?.players]);
   const sqlPreview = sqlInput.trim()
     ? sqlInput.trim().split('\n')[0]
     : "SELECT * FROM ...";
@@ -1004,6 +1020,8 @@ export default function App() {
           .filter((role) => !lobbyPlayers.some((p: any) => playerHasRole(p, role)));
     const mustFillRoles = gameMode !== "Solo" && missingRequiredRoles.length > 0;
     const canStartAdventure = !needsMorePlayersForMultiplayer && !mustFillRoles;
+    const showMustFillRoles = startAttempted && mustFillRoles;
+    const showWaitingPlayers = needsMorePlayersForMultiplayer && !showMustFillRoles;
     // Shared player setup block — class picker locked once connected
     const PlayerSetup = (
       <div className="bg-[#784f2b] border-[3px] border-[#523315] rounded-xl p-4 flex flex-col gap-3">
@@ -1378,24 +1396,26 @@ export default function App() {
                     <>
                       <button
                         onClick={() => {
-                          if (!canStartAdventure) return;
+                          if (!canStartAdventure) {
+                            setStartAttempted(true);
+                            return;
+                          }
                           playConfirm();
                           ws?.send(JSON.stringify({ type: "start_game" }));
                         }}
-                        disabled={!canStartAdventure}
-                        className={`w-full mt-1 text-[#fde6b3] font-pixelify tracking-widest px-6 py-4 rounded-xl text-3xl transition-all ${
-                          !canStartAdventure
-                            ? `${mustFillRoles ? 'text-[#ef4444]' : 'text-[#caa373]'} bg-[#5b3b16] border-b-[6px] border-[#3f2a11] cursor-not-allowed`
-                            : 'bg-[#d97706] hover:bg-[#b45309] active:bg-[#92400e] border-b-[6px] border-[#92400e] active:border-b-0 active:translate-y-[6px] shadow-[0_0_20px_rgba(217,119,6,0.4)]'
+                        className={`w-full mt-1 font-pixelify tracking-widest px-6 py-4 rounded-xl text-3xl transition-all ${
+                          showMustFillRoles
+                            ? 'text-[#ef4444] bg-[#5b3b16] border-b-[6px] border-[#3f2a11]'
+                            : 'text-[#fde6b3] bg-[#d97706] hover:bg-[#b45309] active:bg-[#92400e] border-b-[6px] border-[#92400e] active:border-b-0 active:translate-y-[6px] shadow-[0_0_20px_rgba(217,119,6,0.4)]'
                         }`}>
-                        {mustFillRoles ? "MUST FILL ROLES!" : "START ADVENTURE!"}
+                        {showMustFillRoles ? "MUST FILL ROLES!" : "START ADVENTURE!"}
                       </button>
-                      {mustFillRoles && (
+                      {showMustFillRoles && (
                         <p className="mt-2 text-center text-[11px] font-pixelify tracking-wide text-[#ef4444]">
                           Missing roles: {missingRequiredRoles.join(', ')}.
                         </p>
                       )}
-                      {needsMorePlayersForMultiplayer && (
+                      {showWaitingPlayers && (
                         <p className="mt-2 text-center text-[11px] font-pixelify tracking-wide text-[#ef4444]">
                           Waiting for 2 players.
                         </p>
