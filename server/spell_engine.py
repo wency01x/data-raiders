@@ -352,7 +352,14 @@ async def _spell_insert(player_id: str) -> dict:
 
 async def _spell_update(player_id: str, target_id: int | None) -> dict:
     room_num = state.room_number
-    should_run_merge = room_num in (1, 2, 4) or (room_num == 3 and state.targets_remaining == 0)
+    # UPDATE merge (Swordsman E) is only allowed after clearing objective targets.
+    if room_num in (1, 2, 4) and state.targets_remaining > 0:
+        return {
+            "success": False,
+            "message": f"UPDATE MERGE not allowed yet — clear the room objective first ({state.targets_remaining} target(s) remaining).",
+        }
+
+    should_run_merge = (room_num in (1, 2, 4, 3)) and state.targets_remaining == 0
     if should_run_merge:
 
         async with state.lock:
