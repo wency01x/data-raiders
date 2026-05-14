@@ -996,6 +996,14 @@ export default function App() {
       if (!p) return false;
       return normalizeRole(extractPlayerRole(p)) === normalizeRole(role);
     };
+    const lobbyPlayers = Array.isArray(gameState?.players) ? gameState.players : [];
+    const missingRequiredRoles = gameMode === "Solo"
+      ? []
+      : ROLE_OPTIONS
+          .map((r) => r.value)
+          .filter((role) => !lobbyPlayers.some((p: any) => playerHasRole(p, role)));
+    const mustFillRoles = gameMode !== "Solo" && missingRequiredRoles.length > 0;
+    const canStartAdventure = !needsMorePlayersForMultiplayer && !mustFillRoles;
     // Shared player setup block — class picker locked once connected
     const PlayerSetup = (
       <div className="bg-[#784f2b] border-[3px] border-[#523315] rounded-xl p-4 flex flex-col gap-3">
@@ -1370,18 +1378,23 @@ export default function App() {
                     <>
                       <button
                         onClick={() => {
-                          if (needsMorePlayersForMultiplayer) return;
+                          if (!canStartAdventure) return;
                           playConfirm();
                           ws?.send(JSON.stringify({ type: "start_game" }));
                         }}
-                        disabled={needsMorePlayersForMultiplayer}
+                        disabled={!canStartAdventure}
                         className={`w-full mt-1 text-[#fde6b3] font-pixelify tracking-widest px-6 py-4 rounded-xl text-3xl transition-all ${
-                          needsMorePlayersForMultiplayer
-                            ? 'bg-[#5b3b16] border-b-[6px] border-[#3f2a11] text-[#caa373] cursor-not-allowed'
+                          !canStartAdventure
+                            ? `${mustFillRoles ? 'text-[#ef4444]' : 'text-[#caa373]'} bg-[#5b3b16] border-b-[6px] border-[#3f2a11] cursor-not-allowed`
                             : 'bg-[#d97706] hover:bg-[#b45309] active:bg-[#92400e] border-b-[6px] border-[#92400e] active:border-b-0 active:translate-y-[6px] shadow-[0_0_20px_rgba(217,119,6,0.4)]'
                         }`}>
-                        START ADVENTURE!
+                        {mustFillRoles ? "MUST FILL ROLES!" : "START ADVENTURE!"}
                       </button>
+                      {mustFillRoles && (
+                        <p className="mt-2 text-center text-[11px] font-pixelify tracking-wide text-[#ef4444]">
+                          Missing roles: {missingRequiredRoles.join(', ')}.
+                        </p>
+                      )}
                       {needsMorePlayersForMultiplayer && (
                         <p className="mt-2 text-center text-[11px] font-pixelify tracking-wide text-[#ef4444]">
                           Waiting for 2 players.
