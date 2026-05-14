@@ -528,6 +528,11 @@ async def websocket_endpoint(ws: WebSocket):
                         str(getattr(p, "game_mode", "Standard")).strip().lower()
                         for p in state.players.values()
                     }
+                    filled_roles = {
+                        role
+                        for role in (_extract_role(p.name) for p in state.players.values())
+                        if role in VALID_ROLES
+                    }
                 is_multiplayer_lobby = "solo" not in lobby_modes
                 if is_multiplayer_lobby and player_count < 2:
                     await bus.send_to(player.id, {
@@ -535,6 +540,14 @@ async def websocket_endpoint(ws: WebSocket):
                         "message": "Need at least 2 players to start Multiplayer mode.",
                     })
                     continue
+                if is_multiplayer_lobby:
+                    missing_roles = sorted(VALID_ROLES - filled_roles)
+                    if missing_roles:
+                        await bus.send_to(player.id, {
+                            "type": "reset_ack",
+                            "message": f"Cannot start yet — roles not filled. Missing: {', '.join(missing_roles)}.",
+                        })
+                        continue
                 _game_started = True
                 state.game_phase = "JOURNEY_MAP"
                 await bus.enqueue({"type": "reset_ack", "message": "The adventure begins!"})
