@@ -20,6 +20,51 @@ _start_time = time.time()
 _lobby_open: bool = False    # Host must explicitly open the lobby before anyone can join
 _game_started: bool = False  # Set to True when host clicks START ADVENTURE; reset when all leave
 VALID_ROLES = {"Archer", "Swordsman", "Wizard"}
+ROOM_1_TO_3_NAME_POOL = [
+    "Kerbalerks",
+    "Bato",
+    "Digong",
+    "Inday Sarah",
+    "BBM",
+    "Oplimo",
+    "Sam Sepiol",
+    "Malunggay Pandesal",
+    "Den Jester",
+    "MrLorax",
+    "Claire Castro",
+    "Den Jester",
+    "Luka Doncic",
+    "Lebron James",
+    "Lebron",
+    "Jisu Life",
+]
+_room_name_assignments: dict[str, dict[int, str]] = {}
+
+
+def _ensure_room_1_to_3_name_assignments(conn):
+    global _room_name_assignments
+    if _room_name_assignments:
+        return
+
+    room_tables = ("enemies_room1", "enemies_room2", "enemies_room3")
+    shuffled = ROOM_1_TO_3_NAME_POOL[:]
+    random.shuffle(shuffled)
+    pool_idx = 0
+    assignments: dict[str, dict[int, str]] = {}
+
+    for table in room_tables:
+        rows = conn.execute(f"SELECT id, name FROM {table} ORDER BY id").fetchall()
+        table_map: dict[int, str] = {}
+        for row in rows:
+            if pool_idx < len(shuffled):
+                table_map[row["id"]] = shuffled[pool_idx]
+                pool_idx += 1
+            else:
+                # Pool exhausted: keep existing DB name for overflow rows.
+                table_map[row["id"]] = row["name"]
+        assignments[table] = table_map
+
+    _room_name_assignments = assignments
 
 
 @asynccontextmanager
@@ -55,8 +100,28 @@ else:
 
 def _load_room(table: str):
     conn = get_connection()
+    if table in {"enemies_room1", "enemies_room2", "enemies_room3"}:
+        _ensure_room_1_to_3_name_assignments(conn)
+        assigned = _room_name_assignments.get(table, {})
+        for enemy_id, nm in assigned.items():
+            conn.execute(f"UPDATE {table} SET label=?, name=? WHERE id=?", (nm, nm, enemy_id))
+        conn.commit()
     enemies = conn.execute(f"SELECT * FROM {table}").fetchall()
     room_row = conn.execute("SELECT * FROM rooms WHERE table_ref=?", (table,)).fetchone()
+    if room_row and table in {"enemies_room1", "enemies_room2", "enemies_room3"}:
+        try:
+            schema = json.loads(room_row["schema_info"] or "{}")
+        except Exception:
+            schema = {}
+        columns = schema.get("columns", [])
+        if columns:
+            cols_sql = ", ".join(columns)
+            sample_rows = conn.execute(
+                f"SELECT {cols_sql} FROM {table} WHERE alive=1 ORDER BY id LIMIT 2"
+            ).fetchall()
+            schema["sample_data"] = [[r[c] for c in columns] for r in sample_rows]
+            room_row = dict(room_row)
+            room_row["schema_info"] = json.dumps(schema)
     room_id = room_row["id"] if room_row else 1
     loot = conn.execute("SELECT * FROM loot WHERE room_id = ?", (room_id,)).fetchall()
     conn.close()
