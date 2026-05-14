@@ -756,10 +756,14 @@ export default function GameCanvas({ ws, gameState, myId, attacks, castSpells, o
 
           // Name label above (hidden until revealed by successful SELECT inspect)
           if (revealedEnemyIds.has(e.id)) {
-            ctx.fillStyle = "#e2e8f0";
+            ctx.strokeStyle = "#111111";
+            ctx.lineWidth = 3;
             ctx.font = "bold 11px 'Segoe UI', sans-serif";
             ctx.textAlign = "center";
-            ctx.fillText((e.label || "?").substring(0, 10), e.x + TILE / 2, e.y - 12);
+            const enemyTag = (e.label || "?").substring(0, 18);
+            ctx.strokeText(enemyTag, e.x + TILE / 2, e.y - 12);
+            ctx.fillStyle = "#ef4444";
+            ctx.fillText(enemyTag, e.x + TILE / 2, e.y - 12);
           }
 
           // HP bar
@@ -889,12 +893,12 @@ export default function GameCanvas({ ws, gameState, myId, attacks, castSpells, o
           }
 
           // name + score
-          ctx.fillStyle = isDead ? "#ef4444" : "#e2e8f0";
+          ctx.fillStyle = isMe ? "#facc15" : "#ffffff";
           ctx.font = "bold 12px 'Segoe UI', sans-serif";
           ctx.textAlign = "center";
           const rawName = p.name || "?";
           const displayName = rawName.includes('|') ? rawName.split('|')[0] : rawName;
-          const tag = displayName.substring(0, 7) + (isMe ? " ★" : "") + (isDead ? " 💀" : "");
+          const tag = displayName.substring(0, 7) + (isDead ? " 💀" : "");
           ctx.fillText(tag, p.x + TILE / 2, p.y - 3);
 
           // HP bar under player
